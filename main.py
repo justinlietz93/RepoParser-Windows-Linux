@@ -73,11 +73,21 @@ def reset_config():
         with open(config_path, 'w') as f:
             yaml.dump(default_config, f, default_flow_style=False)
         
-        # Update session state if it exists
+        # Reset all related session state
         if 'config' in st.session_state:
             st.session_state.config = default_config.copy()
+        if 'loaded_config' in st.session_state:
+            st.session_state.loaded_config = None
+        if 'loaded_rules' in st.session_state:
+            st.session_state.loaded_rules = {}
+        if 'current_tree' in st.session_state:
+            del st.session_state.current_tree
+        if 'crawler' in st.session_state:
+            del st.session_state.crawler
+        if 'config_hash' in st.session_state:
+            del st.session_state.config_hash
             
-        logger.info("Configuration reset to default values")
+        logger.info("Configuration and session state reset to default values")
         return True
     except Exception as e:
         logger.error(f"Error resetting configuration: {str(e)}")

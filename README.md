@@ -8,80 +8,89 @@ A powerful Python-based tool that quickly produces context prompts for LLMs by a
 
 ## Features
 
-- 📁 File tree visualization
-- 📝 Syntax-highlighted code viewer
-- 🔢 Token analysis and cost estimation for AI models
-- ⚙️ Configurable file extensions and ignore patterns
-- 📊 Detailed logging and error handling
-- 💾 Customizable output formats
+### 🎯 Core Features
+- Interactive repository exploration
+- Token analysis with GPT model support
+- Cross-platform compatibility
+- Configurable ignore patterns
+- XML-formatted codebase overview
 
-## Quick Start
+### 🎨 Modern UI
+- Tabbed sidebar interface for better organization
+  - Settings: Model and repository configuration
+  - Files: Upload and manage system files
+  - Patterns: Configure ignore patterns
+- Visual file browser for repository selection
+- Interactive file tree visualization
+- Syntax highlighting for 25+ languages
+- Token analysis visualization
 
-### Prerequisites
+### 🔧 Configuration
+- Extensive ignore patterns for files and directories
+- Multiple GPT model support
+  - GPT-4 (default)
+  - GPT-4-32k
+  - GPT-3.5-turbo
+  - GPT-3.5-turbo-16k
+- Cross-platform path handling
+- Configurable logging system
 
-- Python 3.6+
-- Git (for cloning the repository)
-
-### Installation
+## Installation
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/justinlietz93/RepoParser.git
-   cd RepoParser
-   ```
+```bash
+git clone https://github.com/justinlietz93/RepoPrompt-Windows-Linux.git
+cd repo_crawler
+```
 
 2. Create and activate a virtual environment:
-   ```bash
-   # Windows
-   python -m venv venv
-   .\venv\Scripts\activate
+```bash
+# Windows
+python -m venv venv
+.\venv\Scripts\activate
 
-   # Linux/Mac
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
+# Linux/macOS
+python3 -m venv venv
+source venv/bin/activate
+```
 
 3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+pip install -r requirements.txt
+```
 
-### Running the App
+## Usage
 
-1. Start the Streamlit application:
-   ```bash
-   streamlit run main.py
-   ```
+1. Start the application:
+```bash
+streamlit run main.py
+```
 
-2. The web interface will open in your default browser
-
-### Using the Interface
-
-1. **Repository Configuration**:
-   - Enter your repository path in the sidebar
-   - Add/remove file extensions to analyze
-   - Manage ignore patterns for files and directories
-
-2. **File Navigation**:
-   - Browse the interactive file tree in the left panel
-   - Click on files to view their contents
-   - Directories expand/collapse on click
-
-3. **File Analysis**:
-   - View syntax-highlighted file contents
-   - See file metadata and statistics
-   - Get token analysis and cost estimates
+2. Using the interface:
+   - Select repository using the visual file browser
+   - Choose token analysis model
+   - Configure ignore patterns if needed
+   - Upload system files (config, rules, etc.)
+   - Click "Generate Prompt" to analyze
 
 ## Configuration
 
-The application maintains configuration in `config/config.yaml`, but you can manage all settings through the UI:
+### Repository Settings
+- Use the Settings tab to:
+  - Select token analysis model
+  - Set repository path via browser or manual input
 
-- File extensions to include
-- Directories and files to ignore
-- Output preferences
-- Logging settings
+### File Management
+- Use the Files tab to:
+  - Upload configuration files (.yaml, .yml)
+  - Upload rule files (.txt, .md, .cursorrules)
+  - View and manage loaded files
 
-## Supported Languages
+### Pattern Management
+- Use the Patterns tab to:
+  - Configure ignored directories
+  - Set ignored file patterns
+  - Download current configuration
 
 The file viewer supports syntax highlighting for:
 - Python (.py)
@@ -106,26 +115,33 @@ The file viewer supports syntax highlighting for:
 - XML (.xml)
 - Dockerfiles
 
+### Project Structure
 ```
-MIT License
-
-Copyright (c) 2025 Justin Lietz
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Repository_Crawler/
+├── frontend/          # UI components
+├── backend/           # Core functionality
+├── config/           # Configuration files
+├── logs/            # Application logs
+├── prompts/         # Generated output
+└── tests/          # Test suite
 ```
+
+
+## Known Issues
+- Repository traversal system needs improvement
+- XML generation formatting issues
+- UI component state persistence
+- Linux / Mac compatibility verification needed
+
+## Next Steps
+1. Fix repository traversal system
+2. Improve XML generation
+3. Enhance error handling
+4. Add comprehensive testing
+5. Test cross platform compatibility
+
+## License
+[MIT License](LICENSE)
+
+## Support
+For support, please open an issue in the GitHub repository.
