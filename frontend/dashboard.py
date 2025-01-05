@@ -132,7 +132,7 @@ def render_sidebar():
 
 def render_file_explorer(repo_path):
     """Render the file explorer tab."""
-    st.title("Repository Analysis")
+
     
     if repo_path and Path(repo_path).exists():
         try:
@@ -145,7 +145,7 @@ def render_file_explorer(repo_path):
             tree_col, content_col = st.columns([1, 2])
             
             with tree_col:
-                st.subheader("File Tree")
+
                 file_tree = FileTreeComponent(crawler.get_file_tree())
                 selected_file = file_tree.render()
                 
