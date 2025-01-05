@@ -58,12 +58,15 @@ class RepositoryCrawler:
         Generate a hierarchical file tree structure.
         
         Returns:
-            Dictionary representing the file tree
+            Dictionary representing the file tree with root path
         """
         self.logger.info("Generating file tree structure")
-        tree = {}
+        tree = {
+            'path': str(self.root_path),
+            'contents': {}
+        }
         try:
-            self._build_tree_dict(self.root_path, tree)
+            self._build_tree_dict(self.root_path, tree['contents'])
             self.logger.info("File tree generated successfully")
             return tree
         except Exception as e:

@@ -1,87 +1,95 @@
 # Repository Crawler Architecture
 
+## Project Overview
+A Python-based tool for analyzing local repositories, featuring a Streamlit web interface for interactive exploration and token analysis.
+
 ## Directory Structure
 
 ```
 Repository_Crawler/
 ├── frontend/
 │ ├── components/
-│ │ ├── file_tree.py
-│ │ └── file_viewer.py
-│ ├── home.py
-│ └── settings.py
+│ │ ├── file_tree.py      # Interactive file tree visualization
+│ │ └── file_viewer.py    # File content display with syntax highlighting
+│ ├── home.py             # Main page UI
+│ └── settings.py         # Settings and configuration UI
 ├── backend/
 │ └── core/
-│   ├── crawler.py
-│   ├── file_handler.py
-│   └── tokenizer.py
+│   ├── crawler.py        # Repository traversal and analysis
+│   ├── file_handler.py   # File operations and metadata
+│   └── tokenizer.py      # Token analysis and calculations
 ├── config/
-│ └── config.yaml
-├── logs/
+│ └── config.yaml         # Application configuration
+├── logs/                 # Application logs
 │ └── *.log
-├── prompts/
-├── tests/
-├── main.py
-├── ARCHITECTURE.md
-├── CHANGELOG.md
-├── README.md
-└── requirements.txt
+├── prompts/             # Generated analysis output
+├── tests/              # Test suite
+├── main.py             # Application entry point
+└── requirements.txt    # Python dependencies
 ```
 
 ## Core Components
 
-### Configuration
-- Located in `/config/config.yaml`
-- Stores application settings and ignore patterns
-- Managed through the UI settings panel
-
-### Frontend
-- Components for file tree visualization and content viewing
-- Settings management and configuration interface
-- Located in `/frontend` directory
+### Frontend (Streamlit UI)
+- **File Tree Component**: Interactive repository structure visualization
+  - Expandable directory tree
+  - File selection handling
+  - Path management
+- **File Viewer Component**: Content display and analysis
+  - Syntax highlighting for 25+ languages
+  - File metadata display
+  - Error handling for various file types
 
 ### Backend
-- Core logic for repository analysis and token calculation
-- File system operations and crawling functionality
-- Located in `/backend/core` directory
+- **Repository Crawler**: Core analysis engine
+  - Configurable file filtering
+  - Directory traversal
+  - Ignore pattern management
+- **File Handler**: File system operations
+  - Safe file reading
+  - Metadata extraction
+  - Cross-platform compatibility
+- **Token Analyzer**: Content analysis
+  - Token counting
+  - Language detection
+  - Cost estimation
 
-### Logging
-- Detailed application logs stored in `/logs`
-- Timestamped log files for debugging and monitoring
+### Configuration
+- **Location**: `/config/config.yaml`
+- **Features**:
+  - Extensive ignore patterns for common files/directories
+  - Language-specific settings
+  - Configurable logging
+  - Token analysis settings
+  - Output management
+
+### Logging System
+- Timestamped log files
+- Configurable log levels
+- Detailed error tracking
+- Performance monitoring
 
 ## Data Flow
-1. User inputs repository path through UI
-2. Configuration loaded from `/config/config.yaml`
+1. User inputs repository path via Streamlit UI
+2. Configuration loaded from `config.yaml`
 3. Repository crawler analyzes directory structure
-4. File tree component displays repository structure
-5. User selects files for viewing
-6. File viewer displays content with syntax highlighting
-7. Token analyzer processes file content
+4. File tree component renders repository structure
+5. User interacts with file tree
+6. File viewer displays selected content
+7. Token analyzer processes content
 8. Results displayed in UI
 
-## Key Classes
+## Error Handling
+- File permission errors
+- Invalid paths
+- Binary file detection
+- Configuration errors
+- Token analysis failures
+- UI state management
 
-### RepositoryCrawler
-- Handles repository traversal
-- Manages file filtering based on ignore patterns
-- Builds directory tree structure
-
-### FileViewer
-- Displays file contents
-- Provides syntax highlighting
-- Shows file metadata
-
-### TokenAnalyzer
-- Analyzes file content
-- Calculates token statistics
-- Supports multiple programming languages
-
-### FileTreeComponent
-- Renders interactive file tree
-- Handles file selection
-- Manages tree state
-
-## Configuration Management
-- UI-based configuration editing
-- Automatic config file updates
-- Default patterns for common ignore cases
+## Performance Considerations
+- Lazy loading of file contents
+- Efficient tree traversal
+- Configurable ignore patterns
+- Memory-efficient file handling
+- Responsive UI updates
