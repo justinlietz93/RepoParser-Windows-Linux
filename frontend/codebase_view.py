@@ -200,7 +200,7 @@ def build_prompt(codebase_dict):
 
 def render_codebase_view():
     """Render the codebase view page."""
-    st.title("Codebase Overview 📚")
+    st.title("Codebase Parser 📚")
     
     # Get repository path from session state
     repo_path = st.session_state.config.get('local_root', '')
@@ -218,7 +218,7 @@ def render_codebase_view():
     # Store selected model in session state
     st.session_state.config['model'] = model
     
-    if st.button("Generate Codebase Overview"):
+    if st.button("Generate Prompt"):
         with st.spinner("Analyzing codebase..."):
             try:
                 # Build codebase JSON

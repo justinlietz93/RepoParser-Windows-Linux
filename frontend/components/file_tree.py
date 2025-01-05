@@ -84,7 +84,7 @@ class FileTreeComponent:
                     # Directory node with toggle
                     with cols[0]:
                         is_expanded = st.checkbox(
-                            "📂" if item_key in st.session_state.expanded_dirs else "📁",
+                            "",
                             key=f"dir_{item_key}",
                             value=item_key in st.session_state.expanded_dirs,
                             label_visibility="collapsed",
@@ -96,7 +96,7 @@ class FileTreeComponent:
                         indent = "│   " * level
                         prefix = "└── " if level > 0 else ""
                         st.markdown(
-                            f"{indent}{prefix}{item.name}/",
+                            f"{indent}{prefix}📁 {item.name}/",
                             help=f"Directory: {item_key}"
                         )
                     
