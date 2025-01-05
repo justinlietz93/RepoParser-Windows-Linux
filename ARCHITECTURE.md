@@ -23,25 +23,32 @@ A Python-based tool for analyzing local repositories, featuring a Streamlit web 
    - Directory hierarchy representation issues
 
 ### Recent Changes
-1. **Model Configuration Updates**:
+1. **Sidebar Reorganization**:
+   - Implemented tabbed interface (Settings, Files, Patterns)
+   - Added visual file browser for repository selection
+   - Improved model selection UI
+   - Enhanced file upload system
+   - Streamlined pattern management
+
+2. **Model Configuration Updates**:
    - Changed default model to GPT-4
    - Improved model selection UI
    - Added model persistence
    - Fixed token analyzer configuration
 
-2. **Logging System Improvements**:
+3. **Logging System Improvements**:
    - Consolidated logging configuration
    - Single log file per run
    - Improved log message format
    - Better error tracking
 
-3. **XML Format Updates**:
+4. **XML Format Updates**:
    - Implemented proper directory nesting
    - Added full path support in tags
    - Improved CDATA wrapping
    - Enhanced indentation consistency
 
-4. **UI Enhancements**:
+5. **UI Enhancements**:
    - Removed redundant copy button
    - Improved token analysis display
    - Enhanced error message presentation
@@ -53,29 +60,40 @@ A Python-based tool for analyzing local repositories, featuring a Streamlit web 
 Repository_Crawler/
 ├── frontend/
 │ ├── components/
-│ │ ├── file_tree.py      # Interactive file tree visualization
-│ │ └── file_viewer.py    # File content display with syntax highlighting
-│ ├── codebase_view.py    # Complete codebase analysis view
-│ ├── home.py             # Main page UI
-│ └── settings.py         # Settings and configuration UI
+│ │ ├── sidebar.py       # Tabbed sidebar interface
+│ │ ├── file_tree.py     # Interactive file tree visualization
+│ │ └── file_viewer.py   # File content display with syntax highlighting
+│ ├── codebase_view.py   # Complete codebase analysis view
+│ ├── home.py            # Main page UI
+│ └── settings.py        # Settings and configuration UI
 ├── backend/
 │ └── core/
-│   ├── crawler.py        # Repository traversal and analysis
-│   ├── file_handler.py   # File operations and metadata
-│   └── tokenizer.py      # Token analysis and calculations
+│   ├── crawler.py       # Repository traversal and analysis
+│   ├── file_handler.py  # File operations and metadata
+│   └── tokenizer.py     # Token analysis and calculations
 ├── config/
-│ └── config.yaml         # Application configuration
-├── logs/                 # Application logs
+│ └── config.yaml        # Application configuration
+├── logs/                # Application logs
 │ └── *.log
-├── prompts/             # Generated analysis output
-├── tests/              # Test suite (planned)
-├── main.py             # Application entry point
-└── requirements.txt    # Python dependencies
+├── prompts/            # Generated analysis output
+├── tests/             # Test suite (planned)
+├── main.py            # Application entry point
+└── requirements.txt   # Python dependencies
 ```
 
 ## Core Components
 
 ### Frontend (Streamlit UI)
+- **Sidebar Component**: Main navigation and configuration interface
+  - Tabbed interface for better organization
+  - Settings tab: Model selection and repository configuration
+  - Files tab: File upload and management
+  - Patterns tab: Ignore pattern configuration
+  - Visual file browser for repository selection
+  - Known Limitations:
+    - State persistence between tabs
+    - Layout consistency in different screen sizes
+
 - **File Tree Component**: Interactive repository structure visualization
   - State-based directory expansion
   - File selection handling
