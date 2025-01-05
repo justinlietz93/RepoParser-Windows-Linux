@@ -32,32 +32,80 @@ logger.info("Starting Repository Crawler")
 import streamlit as st
 import yaml
 
+def get_default_config():
+    """Return the default configuration."""
+    return {
+        'ignore_patterns': {
+            'directories': [
+                '.git', '__pycache__', 'node_modules', 'venv', '.venv', 'env', '.env',
+                'build', 'dist', '.idea', '.vscode', '.vs', 'bin', 'obj', 'out', 'target',
+                'coverage', '.coverage', '.pytest_cache', '.mypy_cache', '.tox', '.eggs',
+                '.sass-cache', 'bower_components', 'jspm_packages', '.next', '.nuxt',
+                '.serverless', '.terraform', 'vendor'
+            ],
+            'files': [
+                '*.pyc', '*.pyo', '*.pyd', '*.so', '*.dll', '*.dylib', '*.egg',
+                '*.egg-info', '*.whl', '.DS_Store', '.env', '*.log', '*.swp', '*.swo',
+                '*.class', '*.jar', '*.war', '*.nar', '*.ear', '*.zip', '*.tar.gz',
+                '*.rar', '*.min.js', '*.min.css', '*.map', '.env.local',
+                '.env.development.local', '.env.test.local', '.env.production.local',
+                '.env.*', '*.sqlite', '*.db', '*.db-shm', '*.db-wal', '*.suo',
+                '*.user', '*.userosscache', '*.sln.docstates', 'thumbs.db', '*.cache',
+                '*.bak', '*.tmp', '*.temp', '*.pid', '*.seed', '*.pid.lock',
+                '*.tsbuildinfo', '.eslintcache', '.node_repl_history', '.yarn-integrity',
+                '.grunt', '.lock-wscript'
+            ]
+        },
+        'local_root': '',
+        'model': 'gpt-4'
+    }
+
+def reset_config():
+    """Reset the config file to default values."""
+    try:
+        config_path = Path(__file__).parent / 'config' / 'config.yaml'
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Get default configuration
+        default_config = get_default_config()
+        
+        # Write default config to file
+        with open(config_path, 'w') as f:
+            yaml.dump(default_config, f, default_flow_style=False)
+        
+        # Update session state if it exists
+        if 'config' in st.session_state:
+            st.session_state.config = default_config.copy()
+            
+        logger.info("Configuration reset to default values")
+        return True
+    except Exception as e:
+        logger.error(f"Error resetting configuration: {str(e)}")
+        return False
+
 def initialize_session_state():
     """Initialize the session state with configuration."""
+    # Reset config to default values at startup
+    reset_config()
+    
     if 'config' not in st.session_state:
         logger.info("Loading initial configuration")
         try:
             config_path = Path(__file__).parent / 'config' / 'config.yaml'
             with open(config_path, 'r') as f:
                 st.session_state.config = yaml.safe_load(f)
-                # Ensure ignore_patterns exists
-                if 'ignore_patterns' not in st.session_state.config:
-                    st.session_state.config['ignore_patterns'] = {'directories': [], 'files': []}
-                # Ensure model is set
-                if 'model' not in st.session_state.config:
-                    st.session_state.config['model'] = 'gpt-4'
             logger.info("Configuration loaded successfully")
         except Exception as e:
             logger.error(f"Error loading configuration: {str(e)}")
             st.error("Failed to load configuration file")
-            # Create default config if file doesn't exist
-            st.session_state.config = {
-                'ignore_patterns': {'directories': [], 'files': []},
-                'model': 'gpt-4'
-            }
+            st.session_state.config = get_default_config()
 
     if 'selected_file' not in st.session_state:
         st.session_state.selected_file = None
+
+# Register reset_config to run at shutdown
+import atexit
+atexit.register(reset_config)
 
 def main():
     """Main application entry point."""

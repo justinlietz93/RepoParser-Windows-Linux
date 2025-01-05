@@ -83,5 +83,5 @@ ignore_patterns:
   - .yarn-integrity
   - .grunt
   - .lock-wscript
-local_root: E:\Qwen2.5_Coder\Ooobabooga\text-generation-webui
+local_root: ''
 model: gpt-4
