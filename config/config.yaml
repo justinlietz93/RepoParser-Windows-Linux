@@ -1,21 +1,44 @@
 ignore_patterns:
   directories:
   - .git
+  - .svn
+  - .hg
   - .github
+  - .gitlab
   - __pycache__
-  - node_modules
+  - '*.egg-info'
+  - .pytest_cache
+  - .mypy_cache
+  - .coverage
   - venv
   - .venv
   - env
   - .env
+  - .tox
+  - node_modules
+  - bower_components
   - build
   - dist
+  - out
+  - target
+  - bin
   - .idea
   - .vscode
+  - .vs
+  - .eclipse
+  - .settings
   - vendor
   - site-packages
-  - tests
   - docs
+  - doc
+  - documentation
+  - tests
+  - test
+  - testing
+  - coverage
+  - tmp
+  - temp
+  - cache
   files:
   - '*.pyc'
   - '*.pyo'
@@ -23,32 +46,71 @@ ignore_patterns:
   - '*.so'
   - '*.dll'
   - '*.dylib'
-  - '*.egg-info'
   - '*.egg'
   - '*.whl'
+  - .coverage
+  - coverage.xml
+  - .pytest_cache
+  - '*.min.js'
+  - '*.min.css'
+  - package-lock.json
+  - yarn.lock
+  - '*.test.js'
+  - '*.spec.js'
   - .DS_Store
   - Thumbs.db
+  - desktop.ini
   - '*.log'
+  - npm-debug.log*
+  - yarn-debug.log*
+  - yarn-error.log*
   - .env
+  - .env.*
+  - '*.env'
   - .gitignore
+  - .gitattributes
+  - .editorconfig
   - '*.lock'
-  - package-lock.json
-  - '*.md'
-  - '*.test.js'
+  - '*.swp'
+  - '*.swo'
+  - '*.map'
+  - '*.d.ts'
+  - README.md
+  - CHANGELOG.md
+  - LICENSE
+  - '*.rst'
+  - '*.bak'
+  - '*.tmp'
+  - '*.temp'
 included_extensions:
+- .py
+- .pyi
 - .ipynb
 - .html
+- .htm
 - .css
+- .scss
+- .sass
+- .less
 - .js
 - .jsx
+- .ts
+- .tsx
 - .md
 - .rst
-- .py
-- .*
-local_root: C:\Github\ticket_tracker\ticket_tracker
+- .txt
+- .json
+- .yaml
+- .yml
+- .ini
+- .cfg
+- .conf
+- .toml
+local_root: C:\Github\Repo_Crawler
 logging:
   datefmt: '%Y-%m-%d %H:%M:%S'
-  format: '%(asctime)s - %(levelname)s - %(message)s'
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
   level: INFO
+model: gpt-3.5-turbo
 output_directory: prompts
-output_filename: ticket_tracker_prompt.txt
+output_filename: repository_analysis.txt
