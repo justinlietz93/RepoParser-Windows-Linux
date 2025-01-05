@@ -1,0 +1,18 @@
+# Core dependencies
+streamlit>=1.22.0
+pyyaml>=6.0.0
+tiktoken>=0.5.1
+pathlib>=1.0.1
+
+# Development dependencies
+pytest>=7.0.0
+black>=22.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+
+# Type checking
+types-PyYAML>=6.0.12
+types-setuptools>=67.1.0
+
+# Optional dependencies for better performance
+watchdog>=2.1.9  # Recommended by Streamlit for better performance 

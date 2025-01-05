@@ -17,9 +17,15 @@ A Python-based tool that crawls local repositories and generates structured docu
 - Implements error handling
 - Ensures cross-platform compatibility
 
+### Tokenizer Module (`core/tokenizer.py`)
+- Analyzes file contents for token usage
+- Calculates token costs for AI models
+- Provides token statistics and metrics
+- Handles different tokenization models
+
 ## User Interface
 
-### Streamlit Application (`streamlit_app.py`)
+### Streamlit Application (`main.py`)
 - Main entry point for web interface
 - Handles routing between pages
 - Manages global state
@@ -55,38 +61,33 @@ A Python-based tool that crawls local repositories and generates structured docu
 - Output settings
 - Logging configuration
 
+### Memory Management (`memory.json`)
+- Project metadata storage
+- Feature tracking
+- Dependency management
+- Configuration state
+
 ## Directory Structure 
 repo_crawler/
 ├── app/
-│ ├── init.py
 │ ├── pages/
-│ │ ├── init.py
 │ │ ├── home.py
 │ │ └── settings.py
-│ ├── components/
-│ │ ├── init.py
-│ │ ├── file_tree.py
-│ │ └── file_viewer.py
-│ └── utils/
-│ ├── init.py
-│ └── styling.py
+│ └── components/
+│   ├── file_tree.py
+│   └── file_viewer.py
 ├── core/
-│ ├── init.py
 │ ├── crawler.py
-│ └── file_handler.py
+│ ├── file_handler.py
+│ └── tokenizer.py
 ├── config/
-│ ├── init.py
 │ └── config.yaml
 ├── prompts/
 │ └── .gitkeep
-├── tests/
-│ ├── init.py
-│ ├── test_crawler.py
-│ └── test_file_handler.py
 ├── main.py
-├── streamlit_app.py
 ├── requirements.txt
 ├── README.md
+├── memory.json
 └── ARCHITECTURE.md
 
 ## Data Flow
@@ -100,11 +101,13 @@ repo_crawler/
    - Directory traversal
    - File filtering
    - Content extraction
+   - Token analysis
    - Tree generation
 
 3. Output Generation
    - File tree visualization
    - Content display
+   - Token statistics
    - Configuration storage
 
 ## Error Handling
@@ -112,3 +115,4 @@ repo_crawler/
 - Invalid paths
 - Decoding issues
 - Configuration errors
+- Token processing errors
