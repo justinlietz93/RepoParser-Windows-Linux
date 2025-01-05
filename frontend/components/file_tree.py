@@ -15,6 +15,13 @@ class FileTreeComponent:
         """
         self.root_path = Path(file_tree['path'])
         self.initialize_state()
+        # Store file tree in session state to detect changes
+        if 'current_tree' not in st.session_state:
+            st.session_state.current_tree = file_tree
+        elif file_tree != st.session_state.current_tree:
+            # Tree has changed, reset expansion state
+            st.session_state.expanded_dirs = set()
+            st.session_state.current_tree = file_tree
 
     def initialize_state(self):
         """Initialize session state for tree expansion and selection."""
@@ -84,7 +91,7 @@ class FileTreeComponent:
                     # Directory node with toggle
                     with cols[0]:
                         is_expanded = st.checkbox(
-                            "",
+                            "Toggle directory",
                             key=f"dir_{item_key}",
                             value=item_key in st.session_state.expanded_dirs,
                             label_visibility="collapsed",
@@ -140,6 +147,10 @@ class FileTreeComponent:
         """
         
         try:
+            # Initialize or increment refresh key
+            if 'file_tree_key' not in st.session_state:
+                st.session_state.file_tree_key = 0
+            
             # Create a container for better organization
             with st.container():
                 # Add header
@@ -150,7 +161,8 @@ class FileTreeComponent:
                     "🔍",
                     value=st.session_state.search_query,
                     placeholder="Search files (ex. 'main.py' case insensitive)",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    key=f"search_{st.session_state.file_tree_key}"
                 )
                 if search != st.session_state.search_query:
                     st.session_state.search_query = search
@@ -161,10 +173,11 @@ class FileTreeComponent:
                 with cols[0]:
                     st.write("")  # Empty space for alignment
                 with cols[1]:
-                    if st.button("🔄 Refresh", key="refresh_tree", help="Refresh file tree"):
+                    if st.button("🔄 Refresh", key=f"refresh_tree_{st.session_state.file_tree_key}", help="Refresh file tree"):
                         st.session_state.expanded_dirs = set()
                         st.session_state.selected_file = None
                         st.session_state.search_query = ""
+                        st.session_state.file_tree_key += 1
                         st.rerun()
                 
                 # Render the tree

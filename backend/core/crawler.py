@@ -91,7 +91,13 @@ class RepositoryCrawler:
     def _should_ignore_dir(self, dirname: str) -> bool:
         """Check if directory should be ignored."""
         patterns = self.config.get('ignore_patterns', {}).get('directories', [])
-        should_ignore = any(fnmatch.fnmatch(dirname, pattern) for pattern in patterns)
+        # Use full path for matching to handle nested directories
+        full_path = str(Path(dirname))
+        should_ignore = any(
+            fnmatch.fnmatch(part, pattern)
+            for pattern in patterns
+            for part in full_path.split(os.sep)
+        )
         if should_ignore:
             logger.debug(f"Directory {dirname} matches ignore pattern")
         return should_ignore
@@ -99,7 +105,13 @@ class RepositoryCrawler:
     def _should_ignore_file(self, filename: str) -> bool:
         """Check if file should be ignored."""
         patterns = self.config.get('ignore_patterns', {}).get('files', [])
-        should_ignore = any(fnmatch.fnmatch(filename, pattern) for pattern in patterns)
+        # Use full path for matching to handle nested files
+        full_path = str(Path(filename))
+        should_ignore = any(
+            fnmatch.fnmatch(full_path, pattern) or
+            any(fnmatch.fnmatch(part, pattern) for part in full_path.split(os.sep))
+            for pattern in patterns
+        )
         if should_ignore:
             logger.debug(f"File {filename} matches ignore pattern")
         return should_ignore
