@@ -14,20 +14,27 @@ All notable changes to this project will be documented in this file.
 - ✨ Binary file detection mechanism
 - ✨ File accessibility validation
 - ✨ Improved error messaging and logging system
+- ✨ Model persistence in session state
+- ✨ Full path support in XML tags
 
 ### Changed
 - 🔄 Updated XML generation format for better structure
 - 🔄 Improved directory nesting representation
 - 🔄 Enhanced CDATA wrapping for file contents
-- 🔄 Modified file metadata attributes in XML output
+- 🔄 Changed default model to GPT-4 throughout application
+- 🔄 Updated model selection order in UI
+- 🔄 Improved logging configuration and consolidation
 
 ### Removed
 - 🗑️ Redundant "Copy Prompt" button (using built-in code block copy functionality)
+- 🗑️ Duplicate logging configurations
 
 ### Fixed
 - 🔧 Token analysis display improvements
 - 🔧 Error message presentation enhancements
 - 🔧 File type detection accuracy
+- 🔧 Model configuration in token analyzer
+- 🔧 Single log file per run
 
 ### Known Issues
 1. UI Components:

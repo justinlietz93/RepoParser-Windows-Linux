@@ -16,7 +16,7 @@ class FileTreeComponent:
             st.session_state.selected_node = None
         if 'expanded_nodes' not in st.session_state:
             st.session_state.expanded_nodes = set()
-
+    
     def render_tree_node(self, path: Path, level: int = 0):
         """Render a tree node and its children using checkboxes."""
         try:
@@ -85,7 +85,7 @@ class FileTreeComponent:
                     st.session_state.selected_node = selected_file
             
             return st.session_state.selected_node
-            
+                    
         except Exception as e:
             logger.error(f"Error rendering file tree: {str(e)}")
             st.error(f"Error rendering file tree: {str(e)}")

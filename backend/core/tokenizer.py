@@ -20,7 +20,7 @@ class TokenCalculator:
     def count_tokens(
         self, 
         text: str, 
-        model: str = "gpt-3.5-turbo"
+        model: str = "gpt-4"
     ) -> Tuple[int, List[int]]:
         """
         Count tokens in text for a specific model.
@@ -46,7 +46,7 @@ class TokenCalculator:
     def calculate_cost(
         self, 
         token_count: int, 
-        model: str = "gpt-3.5-turbo", 
+        model: str = "gpt-4", 
         is_output: bool = False
     ) -> float:
         """
@@ -112,7 +112,7 @@ class TokenCalculator:
 class TokenAnalyzer:
     """High-level interface for token analysis with caching and UI-friendly output."""
     
-    def __init__(self, model: str = "gpt-3.5-turbo"):
+    def __init__(self, model: str = "gpt-4"):
         """
         Initialize the token analyzer.
         

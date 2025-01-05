@@ -7,15 +7,16 @@ from backend.core.tokenizer import TokenAnalyzer
 
 logger = logging.getLogger(__name__)
 
-def calculate_costs(total_tokens, model="gpt-3.5-turbo"):
+def calculate_costs(total_tokens, model="gpt-4"):
     """Calculate estimated costs based on token count and model."""
     rates = {
-        "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002},
         "gpt-4": {"input": 0.03, "output": 0.06},
-        "gpt-4-32k": {"input": 0.06, "output": 0.12}
+        "gpt-4-32k": {"input": 0.06, "output": 0.12},
+        "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002},
+        "gpt-3.5-turbo-16k": {"input": 0.0030, "output": 0.0040}
     }
     
-    rate = rates.get(model, rates["gpt-3.5-turbo"])
+    rate = rates.get(model, rates["gpt-4"])
     input_cost = (total_tokens / 1000) * rate["input"]
     output_cost = (total_tokens / 1000) * rate["output"]
     
@@ -45,7 +46,7 @@ def build_codebase_json(repo_path, config):
     """Build JSON representation of the codebase."""
     try:
         crawler = RepositoryCrawler(repo_path, config)
-        analyzer = TokenAnalyzer()
+        analyzer = TokenAnalyzer(model=config.get('model', 'gpt-4'))
         codebase_dict = {}
         total_tokens = 0
         
@@ -207,12 +208,15 @@ def render_codebase_view():
         st.warning("Please set a repository path in the sidebar first.")
         return
     
-    # Model selection
+    # Model selection - default to gpt-4
     model = st.selectbox(
         "Select Token Analysis Model",
-        options=["gpt-3.5-turbo", "gpt-4", "gpt-4-32k"],
+        options=["gpt-4", "gpt-4-32k", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"],
         index=0
     )
+    
+    # Store selected model in session state
+    st.session_state.config['model'] = model
     
     if st.button("Generate Codebase Overview"):
         with st.spinner("Analyzing codebase..."):
