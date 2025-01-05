@@ -1,49 +1,36 @@
 ignore_patterns:
   directories:
   - .git
-  - .svn
-  - .hg
-  - .github
-  - .gitlab
   - __pycache__
-  - '*.egg-info'
-  - .pytest_cache
-  - .mypy_cache
-  - .coverage
+  - node_modules
   - venv
   - .venv
   - env
   - .env
-  - .tox
-  - node_modules
-  - bower_components
   - build
   - dist
-  - out
-  - target
-  - bin
   - .idea
   - .vscode
   - .vs
-  - .eclipse
-  - .settings
-  - vendor
-  - site-packages
-  - docs
-  - doc
-  - documentation
-  - tests
-  - test
-  - testing
+  - bin
+  - obj
+  - out
+  - target
   - coverage
-  - tmp
-  - temp
-  - cache
-  - .aider*
-  - .aider*/
+  - .coverage
+  - .pytest_cache
+  - .mypy_cache
+  - .tox
+  - .eggs
+  - .sass-cache
+  - bower_components
+  - jspm_packages
+  - .next
+  - .nuxt
+  - .serverless
+  - .terraform
+  - vendor
   files:
-  - .cursorrules
-  - .aider*
   - '*.pyc'
   - '*.pyo'
   - '*.pyd'
@@ -51,70 +38,50 @@ ignore_patterns:
   - '*.dll'
   - '*.dylib'
   - '*.egg'
+  - '*.egg-info'
   - '*.whl'
-  - .coverage
-  - coverage.xml
-  - .pytest_cache
-  - '*.min.js'
-  - '*.min.css'
-  - package-lock.json
-  - yarn.lock
-  - '*.test.js'
-  - '*.spec.js'
   - .DS_Store
-  - Thumbs.db
-  - desktop.ini
-  - '*.log'
-  - npm-debug.log*
-  - yarn-debug.log*
-  - yarn-error.log*
   - .env
-  - .env.*
-  - '*.env'
-  - .gitignore
-  - .gitattributes
-  - .editorconfig
-  - '*.lock'
+  - '*.log'
   - '*.swp'
   - '*.swo'
+  - '*.class'
+  - '*.jar'
+  - '*.war'
+  - '*.nar'
+  - '*.ear'
+  - '*.zip'
+  - '*.tar.gz'
+  - '*.rar'
+  - '*.min.js'
+  - '*.min.css'
   - '*.map'
-  - '*.d.ts'
-  - README.md
-  - CHANGELOG.md
-  - LICENSE
-  - '*.rst'
+  - .env.local
+  - .env.development.local
+  - .env.test.local
+  - .env.production.local
+  - .env.*
+  - '*.sqlite'
+  - '*.db'
+  - '*.db-shm'
+  - '*.db-wal'
+  - '*.suo'
+  - '*.user'
+  - '*.userosscache'
+  - '*.sln.docstates'
+  - thumbs.db
+  - '*.cache'
   - '*.bak'
   - '*.tmp'
   - '*.temp'
-included_extensions:
-- .py
-- .pyi
-- .ipynb
-- .html
-- .htm
-- .css
-- .scss
-- .sass
-- .less
-- .js
-- .jsx
-- .ts
-- .tsx
-- .md
-- .rst
-- .txt
-- .json
-- .yaml
-- .yml
-- .ini
-- .cfg
-- .conf
-- .toml
+  - '*.pid'
+  - '*.seed'
+  - '*.pid.lock'
+  - '*.tsbuildinfo'
+  - .eslintcache
+  - .node_repl_history
+  - .yarn-integrity
+  - .grunt
+  - .lock-wscript
 local_root: C:\Github\Repo_Crawler
-logging:
-  datefmt: '%Y-%m-%d %H:%M:%S'
-  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-  level: INFO
-model: gpt-3.5-turbo
-output_directory: prompts
-output_filename: repository_analysis.txt
+model: gpt-4
