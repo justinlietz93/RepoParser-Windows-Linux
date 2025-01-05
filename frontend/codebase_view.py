@@ -134,8 +134,20 @@ def build_directory_tree(codebase_dict):
 
 def build_prompt(codebase_dict):
     """Build a formatted prompt from the codebase contents."""
-    # Start with repository structure
-    prompt_parts = ["# Repository Structure\n"]
+    prompt_parts = []
+    
+    # Add loaded rule files at the top
+    if hasattr(st.session_state, 'loaded_rules') and st.session_state.loaded_rules:
+        prompt_parts.append("# Loaded Rule Files\n")
+        for filename, content in st.session_state.loaded_rules.items():
+            prompt_parts.append(f"## {filename}\n")
+            prompt_parts.append("```")
+            prompt_parts.append(content)
+            prompt_parts.append("```\n")
+        prompt_parts.append("\n")
+    
+    # Add repository structure
+    prompt_parts.append("# Repository Structure\n")
     
     # Add directory tree
     prompt_parts.append("```")
@@ -208,16 +220,6 @@ def render_codebase_view():
         st.warning("Please set a repository path in the sidebar first.")
         return
     
-    # Model selection - default to gpt-4
-    model = st.selectbox(
-        "Select Token Analysis Model",
-        options=["gpt-4", "gpt-4-32k", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"],
-        index=0
-    )
-    
-    # Store selected model in session state
-    st.session_state.config['model'] = model
-    
     if st.button("Generate Prompt"):
         with st.spinner("Analyzing codebase..."):
             try:
@@ -226,6 +228,9 @@ def render_codebase_view():
                     repo_path,
                     st.session_state.config
                 )
+                
+                # Get model from config
+                model = st.session_state.config.get('model', 'gpt-4')
                 
                 # Calculate costs
                 input_cost, output_cost = calculate_costs(total_tokens, model)
