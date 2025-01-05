@@ -1,5 +1,5 @@
 # Prompts output directory
-prompts/
+prompts/*_prompt.txt
 
 # Python
 __pycache__/
