@@ -1,4 +1,6 @@
-# NOTE: This project is still in progress and unfinished
+# NOTE: This project is still in progress. Most of the functionality works, but you may run into bugs and I have more features planned.
+
+```Feel free to do whatever you want with this code, but please share it and give me credit.```
 
 # Repository Crawler 🔍
 
