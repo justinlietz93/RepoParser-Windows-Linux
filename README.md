@@ -2,7 +2,7 @@
 
 # Repository Crawler 🔍
 
-A powerful Python-based tool that analyzes local repositories and generates structured documentation with token cost estimation. Built with Streamlit, it provides an intuitive web interface for exploring codebases and understanding their token usage in the context of AI language models.
+A powerful Python-based tool that quickly produces context prompts for LLMs by analyzing local repositories and generating structured documentation with token cost estimation. Built with Streamlit, it provides an intuitive web interface for exploring codebases and understanding their token usage in the context of AI language models.
 
 ## Features
 
