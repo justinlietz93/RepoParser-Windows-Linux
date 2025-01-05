@@ -40,8 +40,8 @@ env/
 Thumbs.db
 
 # Memory
-# memory.json
+memory.json
 
 # # Cursor
-# .cursorrules
+.cursorrules
 
