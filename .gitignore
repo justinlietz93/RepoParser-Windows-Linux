@@ -40,11 +40,11 @@ env/
 Thumbs.db
 
 # Memory
-# memory.json
+memory.json
 
-# # Cursor
-# .cursorrules
+# Cursor
+.cursorrules
 
-# # Logs
-# logs/*.log
-# changelogrules.md
+# Logs
+logs/*.log
+changelogrules.md
