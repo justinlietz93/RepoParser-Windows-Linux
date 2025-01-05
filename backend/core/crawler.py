@@ -29,7 +29,7 @@ class RepositoryCrawler:
         
         if config is None:
             self.logger.debug("No config provided, loading from config.yaml")
-            self.config = self._load_config("config/config.yaml")
+            self.config = self._load_config(str(Path(__file__).parent.parent.parent / 'config' / 'config.yaml'))
         else:
             self.logger.debug("Using provided config dictionary")
             self.config = config

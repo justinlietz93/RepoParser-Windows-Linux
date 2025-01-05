@@ -24,10 +24,10 @@ logger.info(f"Starting application, logging to {log_file}")
 # Import other modules after logging is configured
 import streamlit as st
 import yaml
-from core.crawler import RepositoryCrawler
-from core.tokenizer import TokenAnalyzer
-from app.components.file_tree import FileTreeComponent
-from app.components.file_viewer import FileViewer
+from backend.core.crawler import RepositoryCrawler
+from backend.core.tokenizer import TokenAnalyzer
+from frontend.components.file_tree import FileTreeComponent
+from frontend.components.file_viewer import FileViewer
 
 # Set page config
 st.set_page_config(
