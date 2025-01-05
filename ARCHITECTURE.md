@@ -1,7 +1,7 @@
 # Repository Crawler Architecture
 
 ## Project Overview
-A Python-based tool for analyzing local repositories, featuring a Streamlit web interface for interactive exploration and token analysis.
+A Python-based tool for analyzing local repositories, featuring a Streamlit web interface for interactive exploration and token analysis. Designed to be cross-platform compatible (Windows, Linux, macOS).
 
 ## Current Status (Updated 2025-01-05)
 
@@ -96,19 +96,25 @@ Repository_Crawler/
   - Configurable file filtering
   - Directory traversal
   - Ignore pattern management
+  - Platform-agnostic path handling
   - Current Issues:
     - Incomplete file traversal implementation
     - Missing 'files' attribute handling
     - Error propagation improvements needed
+    - Linux permission handling verification needed
 
 - **File Handler**: File system operations
   - Safe file reading
   - Metadata extraction
   - Cross-platform compatibility
+    - pathlib.Path for path operations
+    - UTF-8 file encoding
+    - Platform-agnostic file access
   - Recent Improvements:
     - Enhanced error handling
     - Binary file detection
     - Empty file validation
+    - Standardized path handling
 
 - **Token Analyzer**: Content analysis
   - Token counting (GPT-4 default)
@@ -135,6 +141,23 @@ Repository_Crawler/
   - Language-specific settings
   - Model configuration (GPT-4 default)
   - Configurable logging
+  - Platform-specific settings (planned)
+
+### Cross-Platform Compatibility
+- **Path Handling**:
+  - Using pathlib.Path throughout
+  - Platform-agnostic path separators
+  - Case-sensitive path handling
+  
+- **File Operations**:
+  - UTF-8 encoding by default
+  - Platform-specific file permissions
+  - Binary file detection
+  
+- **Known Issues**:
+  - Linux file permission verification needed
+  - Case sensitivity handling in file paths
+  - Path separator consistency in XML output
 
 ### Logging System
 - Single log file per run
