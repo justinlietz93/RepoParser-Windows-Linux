@@ -15,15 +15,26 @@ def render_file_explorer(repo_path):
     if repo_path and Path(repo_path).exists():
         try:
             logger.info(f"Analyzing repository: {repo_path}")
-            # Initialize crawler with root path and config
-            crawler = RepositoryCrawler(repo_path, st.session_state.config)
+            
+            # Store crawler in session state to detect config changes
+            config_hash = str(hash(str(st.session_state.config)))
+            if 'crawler' not in st.session_state or 'config_hash' not in st.session_state or st.session_state.config_hash != config_hash:
+                # Initialize crawler with root path and config
+                st.session_state.crawler = RepositoryCrawler(repo_path, st.session_state.config)
+                st.session_state.config_hash = config_hash
+                # Clear file tree cache to force refresh
+                if 'current_tree' in st.session_state:
+                    del st.session_state.current_tree
+            
+            # Initialize analyzer
             analyzer = TokenAnalyzer()
             
             # Create columns for tree and content
             tree_col, content_col = st.columns([1, 2])
             
             with tree_col:
-                file_tree = FileTreeComponent(crawler.get_file_tree())
+                # Force file tree refresh when config changes
+                file_tree = FileTreeComponent(st.session_state.crawler.get_file_tree())
                 selected_file = file_tree.render()
                 
                 if selected_file:
