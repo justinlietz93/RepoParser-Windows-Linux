@@ -31,8 +31,6 @@ ignore_patterns:
   - .terraform
   - vendor
   files:
-  - '*.git'
-  - '*.txt'
   - '*.pyc'
   - '*.pyo'
   - '*.pyd'
@@ -85,5 +83,5 @@ ignore_patterns:
   - .yarn-integrity
   - .grunt
   - .lock-wscript
-local_root: C:\Github\Repo_Crawler
+local_root: E:\Qwen2.5_Coder\Ooobabooga\text-generation-webui
 model: gpt-4
