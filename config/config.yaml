@@ -83,5 +83,6 @@ ignore_patterns:
   - .yarn-integrity
   - .grunt
   - .lock-wscript
-local_root: ''
+  - backend\core\singleton_manager.py
+local_root: C:\Github\Repo_Crawler
 model: gpt-4
