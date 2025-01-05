@@ -42,6 +42,7 @@ ignore_patterns:
   - .aider*
   - .aider*/
   files:
+  - .cursorrules
   - .aider*
   - '*.pyc'
   - '*.pyo'
@@ -109,11 +110,11 @@ included_extensions:
 - .cfg
 - .conf
 - .toml
-local_root: \\FRACTALG\Users\jliet\source\repos\Websites\My Website\Personal-Website
+local_root: C:\Github\Repo_Crawler
 logging:
   datefmt: '%Y-%m-%d %H:%M:%S'
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
   level: INFO
-model: gpt-4
+model: gpt-3.5-turbo
 output_directory: prompts
 output_filename: repository_analysis.txt

@@ -38,7 +38,7 @@ def render_sidebar():
         
         # Repository path input
         repo_path = st.text_input(
-            "Repository Path",
+            "Repository Path (e.g. C:/full/path/to/your/repository)",
             value=st.session_state.config.get('local_root', ''),
             help="Enter the full path to your local repository"
         )

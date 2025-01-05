@@ -19,7 +19,7 @@ def render():
     model = st.selectbox(
         "Select Model for Token Analysis",
         options=get_available_models(),
-        index=2  # Default to gpt-3.5-turbo
+        index=2  # Default to gpt-4
     )
     
     if st.button("Analyze Repository") and repo_path:

@@ -23,19 +23,25 @@ A Python-based tool for analyzing local repositories, featuring a Streamlit web 
    - Directory hierarchy representation issues
 
 ### Recent Changes
-1. **Error Handling Improvements**:
-   - Enhanced file content reading safety checks
-   - Better binary file detection
-   - Improved error messaging and logging
-   - Added validation for file accessibility
+1. **Model Configuration Updates**:
+   - Changed default model to GPT-4
+   - Improved model selection UI
+   - Added model persistence
+   - Fixed token analyzer configuration
 
-2. **XML Format Updates**:
+2. **Logging System Improvements**:
+   - Consolidated logging configuration
+   - Single log file per run
+   - Improved log message format
+   - Better error tracking
+
+3. **XML Format Updates**:
    - Implemented proper directory nesting
-   - Added file metadata attributes
-   - Improved CDATA wrapping for file contents
+   - Added full path support in tags
+   - Improved CDATA wrapping
    - Enhanced indentation consistency
 
-3. **UI Enhancements**:
+4. **UI Enhancements**:
    - Removed redundant copy button
    - Improved token analysis display
    - Enhanced error message presentation
@@ -105,15 +111,16 @@ Repository_Crawler/
     - Empty file validation
 
 - **Token Analyzer**: Content analysis
-  - Token counting
+  - Token counting (GPT-4 default)
   - Language detection
   - Cost estimation
+  - Model persistence
 
 ### XML Generation System
 - **Purpose**: Generate structured codebase representation
 - **Features**:
   - Hierarchical directory structure
-  - File metadata inclusion
+  - Full path support in tags
   - Content wrapping in CDATA
   - Proper indentation
 - **Current Issues**:
@@ -126,12 +133,12 @@ Repository_Crawler/
 - **Features**:
   - Extensive ignore patterns
   - Language-specific settings
+  - Model configuration (GPT-4 default)
   - Configurable logging
-  - Token analysis settings
 
 ### Logging System
-- Timestamped log files
-- Configurable log levels
+- Single log file per run
+- Simplified log format
 - Detailed error tracking
 - Performance monitoring
 

@@ -43,6 +43,9 @@ def initialize_session_state():
                 # Ensure ignore_patterns exists
                 if 'ignore_patterns' not in st.session_state.config:
                     st.session_state.config['ignore_patterns'] = {'directories': [], 'files': []}
+                # Ensure model is set
+                if 'model' not in st.session_state.config:
+                    st.session_state.config['model'] = 'gpt-4'
             logger.info("Configuration loaded successfully")
         except Exception as e:
             logger.error(f"Error loading configuration: {str(e)}")
@@ -50,7 +53,7 @@ def initialize_session_state():
             # Create default config if file doesn't exist
             st.session_state.config = {
                 'ignore_patterns': {'directories': [], 'files': []},
-                'model': 'gpt-3.5-turbo'
+                'model': 'gpt-4'
             }
 
     if 'selected_file' not in st.session_state:
