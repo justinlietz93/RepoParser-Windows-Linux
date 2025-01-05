@@ -88,10 +88,14 @@ def reset_config():
             del st.session_state.config_hash
             
         logger.info("Configuration and session state reset to default values")
-        return True
+        return True  # placeholder
     except Exception as e:
         logger.error(f"Error resetting configuration: {str(e)}")
         return False
+
+# Register reset_config to run at shutdown
+# import atexit
+# atexit.register(reset_config)
 
 def initialize_session_state():
     """Initialize the session state with configuration."""
@@ -112,10 +116,6 @@ def initialize_session_state():
 
     if 'selected_file' not in st.session_state:
         st.session_state.selected_file = None
-
-# Register reset_config to run at shutdown
-import atexit
-atexit.register(reset_config)
 
 def main():
     """Main application entry point."""

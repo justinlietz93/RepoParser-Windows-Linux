@@ -1,9 +1,10 @@
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 import os
 import logging
 import fnmatch
 import yaml
 from pathlib import Path
+from datetime import datetime
 
 # Just get the logger, don't configure it
 logger = logging.getLogger(__name__)
@@ -11,110 +12,249 @@ logger = logging.getLogger(__name__)
 class RepositoryCrawler:
     """Handles repository traversal and file analysis."""
     
-    def __init__(self, root_path: str, config: Optional[Dict] = None):
-        """
-        Initialize the crawler.
-        
-        Args:
-            root_path: Path to repository root
-            config: Configuration dictionary. If None, loads from config.yaml
-        """
+    def __init__(self, root_path: str, config: Dict[str, Any]):
+        """Initialize the repository crawler."""
         self.root_path = Path(root_path)
-        logger.info(f"Initializing crawler for: {self.root_path}")
         
-        if config is None:
-            self.config = self._load_config(str(Path(__file__).parent.parent.parent / 'config' / 'config.yaml'))
-        else:
-            self.config = config
-            
-        # Ensure ignore_patterns exists
-        if 'ignore_patterns' not in self.config:
-            self.config['ignore_patterns'] = {'directories': [], 'files': []}
-            
-        logger.info(f"Ignoring {len(self.config.get('ignore_patterns', {}).get('directories', []))} directories and {len(self.config.get('ignore_patterns', {}).get('files', []))} file patterns")
+        # Deep copy config to prevent reference issues
+        self.config = {
+            'ignore_patterns': {
+                'directories': list(config.get('ignore_patterns', {}).get('directories', [])),
+                'files': list(config.get('ignore_patterns', {}).get('files', []))
+            }
+        }
         
-    def _load_config(self, config_path: str) -> Dict:
-        """Load configuration from yaml file."""
+        # Cache for file tree to prevent unnecessary recalculation
+        self._file_tree_cache = None
+        self._config_hash = None
+        
+        logger.info("Starting Repository Crawler")
+        logger.debug(f"Initialized with root: {root_path}")
+        logger.debug(f"Config: {self.config}")
+        
+    def _get_config_hash(self) -> str:
+        """Get a more reliable hash of current config for cache invalidation."""
         try:
-            logger.debug(f"Loading config from: {config_path}")
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-            logger.debug("Config loaded successfully")
-            return config
+            # Sort lists to ensure consistent hashing
+            sorted_config = {
+                'ignore_patterns': {
+                    'directories': sorted(self.config['ignore_patterns']['directories']),
+                    'files': sorted(self.config['ignore_patterns']['files'])
+                }
+            }
+            # Use stable string representation
+            config_str = f"dirs:{','.join(sorted_config['ignore_patterns']['directories'])}|files:{','.join(sorted_config['ignore_patterns']['files'])}"
+            return str(hash(config_str))
         except Exception as e:
-            logger.error(f"Error loading config from {config_path}: {str(e)}")
-            raise
+            logger.error(f"Error calculating config hash: {str(e)}")
+            # Return unique hash to invalidate cache
+            return str(hash(str(datetime.now())))
+            
+    def _invalidate_cache(self):
+        """Safely invalidate the file tree cache."""
+        self._file_tree_cache = None
+        self._config_hash = None
+        
+    def update_config(self, new_config: Dict[str, Any]) -> bool:
+        """Update crawler configuration with validation and proper cache management."""
+        try:
+            # Validate new config structure
+            if not isinstance(new_config.get('ignore_patterns'), dict):
+                logger.error("Invalid ignore_patterns structure in new config")
+                return False
+                
+            # Extract and validate patterns
+            new_dirs = list(new_config.get('ignore_patterns', {}).get('directories', []))
+            new_files = list(new_config.get('ignore_patterns', {}).get('files', []))
+            
+            if not all(isinstance(p, str) for p in new_dirs + new_files):
+                logger.error("Invalid pattern type found - all patterns must be strings")
+                return False
+                
+            # Update with validated data
+            self.config = {
+                'ignore_patterns': {
+                    'directories': new_dirs,
+                    'files': new_files
+                }
+            }
+            
+            # Invalidate cache
+            self._invalidate_cache()
+            
+            logger.info("Configuration updated successfully")
+            logger.debug(f"New config: {self.config}")
+            return True
+            
+        except Exception as e:
+            logger.exception("Error updating configuration")
+            return False
             
     def get_file_tree(self) -> Dict:
-        """
-        Generate a hierarchical file tree structure.
-        
-        Returns:
-            Dictionary representing the file tree with root path
-        """
-        logger.info("Generating file tree structure")
-        tree = {
-            'path': str(self.root_path),
-            'contents': {}
-        }
+        """Generate a hierarchical file tree structure with improved caching."""
         try:
+            current_hash = self._get_config_hash()
+            
+            # Return cached tree if config hasn't changed
+            if (self._file_tree_cache is not None and 
+                self._config_hash is not None and 
+                self._config_hash == current_hash):
+                logger.debug("Returning cached file tree")
+                return self._file_tree_cache
+                
+            logger.info("Generating new file tree structure")
+            tree = {
+                'path': str(self.root_path),
+                'contents': {}
+            }
+            
             self._build_tree_dict(self.root_path, tree['contents'])
+            
+            # Update cache with new hash
+            self._file_tree_cache = tree
+            self._config_hash = current_hash
+            
             logger.info("File tree generated successfully")
             return tree
+            
         except Exception as e:
             logger.error(f"Error generating file tree: {str(e)}")
+            # Invalidate cache on error
+            self._invalidate_cache()
             raise
             
     def _build_tree_dict(self, path: Path, tree: Dict) -> None:
         """Recursively build a dictionary representation of the directory tree."""
         try:
-            for item in sorted(path.iterdir()):
-                if item.is_dir():
-                    if self._should_ignore_dir(item.name):
-                        logger.debug(f"Ignoring directory: {item}")
-                        continue
-                    logger.debug(f"Processing directory: {item}")
-                    tree[item.name] = {}
-                    self._build_tree_dict(item, tree[item.name])
-                else:
-                    if self._should_ignore_file(item.name):
-                        logger.debug(f"Ignoring file: {item}")
-                        continue
-                    logger.debug(f"Including file: {item}")
-                    tree[item.name] = None
-        except PermissionError:
-            logger.warning(f"Permission denied accessing: {path}")
+            items = []
+            try:
+                # First try to list directory contents
+                items = sorted(path.iterdir())
+            except PermissionError:
+                logger.warning(f"Permission denied accessing: {path}")
+                tree['__error__'] = 'Permission denied'
+                return
+            except OSError as e:
+                logger.warning(f"OS error accessing {path}: {e}")
+                tree['__error__'] = f'Access error: {str(e)}'
+                return
+                
+            for item in items:
+                try:
+                    if item.is_dir():
+                        if self._should_ignore_dir(item.name):
+                            logger.debug(f"Ignoring directory: {item}")
+                            continue
+                        logger.debug(f"Processing directory: {item}")
+                        tree[item.name] = {}
+                        self._build_tree_dict(item, tree[item.name])
+                    else:
+                        if self._should_ignore_file(item.name):
+                            logger.debug(f"Ignoring file: {item}")
+                            continue
+                        logger.debug(f"Including file: {item}")
+                        tree[item.name] = None
+                except Exception as e:
+                    logger.error(f"Error processing item {item}: {str(e)}")
+                    tree[f"{item.name} (error)"] = f"Error: {str(e)}"
+                    continue
+                    
         except Exception as e:
             logger.error(f"Error processing directory {path}: {str(e)}")
-            raise
-                  
+            tree['__error__'] = f'Processing error: {str(e)}'
+            
     def _should_ignore_dir(self, dirname: str) -> bool:
-        """Check if directory should be ignored."""
-        patterns = self.config.get('ignore_patterns', {}).get('directories', [])
-        # Use full path for matching to handle nested directories
-        full_path = str(Path(dirname))
-        should_ignore = any(
-            fnmatch.fnmatch(part, pattern)
-            for pattern in patterns
-            for part in full_path.split(os.sep)
-        )
-        if should_ignore:
-            logger.debug(f"Directory {dirname} matches ignore pattern")
-        return should_ignore
-                  
+        """Check if directory should be ignored with proper error handling."""
+        try:
+            patterns = self.config.get('ignore_patterns', {}).get('directories', [])
+            
+            # Convert to relative path for matching
+            dir_path = Path(dirname)
+            if not dir_path.is_absolute():
+                dir_path = self.root_path / dir_path
+                
+            try:
+                rel_path = str(dir_path.relative_to(self.root_path))
+                logger.debug(f"Checking directory: {rel_path}")
+                
+                # Check exact matches first
+                if rel_path in patterns:
+                    logger.debug(f"Directory {rel_path} exactly matches ignore pattern")
+                    return True
+                    
+                # Then check pattern matches
+                for pattern in patterns:
+                    try:
+                        if fnmatch.fnmatch(rel_path, pattern):
+                            logger.debug(f"Directory {rel_path} matches pattern {pattern}")
+                            return True
+                    except Exception as e:
+                        logger.warning(f"Error matching pattern {pattern}: {str(e)}")
+                        continue
+                        
+                return False
+                
+            except ValueError:
+                logger.warning(f"Directory {dir_path} is not relative to root {self.root_path}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error checking directory ignore status: {str(e)}")
+            return False
+            
     def _should_ignore_file(self, filename: str) -> bool:
-        """Check if file should be ignored."""
-        patterns = self.config.get('ignore_patterns', {}).get('files', [])
-        # Use full path for matching to handle nested files
-        full_path = str(Path(filename))
-        should_ignore = any(
-            fnmatch.fnmatch(full_path, pattern) or
-            any(fnmatch.fnmatch(part, pattern) for part in full_path.split(os.sep))
-            for pattern in patterns
-        )
-        if should_ignore:
-            logger.debug(f"File {filename} matches ignore pattern")
-        return should_ignore
+        """Check if file should be ignored with proper error handling."""
+        try:
+            patterns = self.config.get('ignore_patterns', {}).get('files', [])
+            
+            # Convert to relative path for matching
+            file_path = Path(filename)
+            if not file_path.is_absolute():
+                file_path = self.root_path / file_path
+                
+            try:
+                rel_path = str(file_path.relative_to(self.root_path))
+                logger.debug(f"Checking file: {rel_path}")
+                
+                # Check exact matches first
+                if rel_path in patterns:
+                    logger.debug(f"File {rel_path} exactly matches ignore pattern")
+                    return True
+                    
+                # Then check pattern matches
+                for pattern in patterns:
+                    try:
+                        if fnmatch.fnmatch(rel_path, pattern):
+                            logger.debug(f"File {rel_path} matches pattern {pattern}")
+                            return True
+                    except Exception as e:
+                        logger.warning(f"Error matching pattern {pattern}: {str(e)}")
+                        continue
+                        
+                # Check if any parent directory is ignored
+                current = file_path.parent
+                while current != self.root_path and current != current.parent:
+                    try:
+                        current_rel = str(current.relative_to(self.root_path))
+                        if current_rel in self.config.get('ignore_patterns', {}).get('directories', []):
+                            logger.debug(f"File {rel_path} ignored via parent directory {current_rel}")
+                            return True
+                    except ValueError:
+                        break
+                    except Exception as e:
+                        logger.warning(f"Error checking parent directory {current}: {str(e)}")
+                        break
+                    current = current.parent
+                    
+                return False
+                
+            except ValueError:
+                logger.warning(f"File {file_path} is not relative to root {self.root_path}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error checking file ignore status: {str(e)}")
+            return False
 
     def walk(self) -> List[Tuple[str, int]]:
         """
