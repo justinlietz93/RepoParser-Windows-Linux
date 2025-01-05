@@ -45,3 +45,5 @@ memory.json
 # # Cursor
 .cursorrules
 
+# Logs
+logs/*.log

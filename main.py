@@ -1,12 +1,6 @@
-import streamlit as st
-import yaml
 import logging
 from pathlib import Path
 from datetime import datetime
-from core.crawler import RepositoryCrawler
-from core.tokenizer import TokenAnalyzer
-from app.components.file_tree import FileTreeComponent
-from app.components.file_viewer import FileViewer
 
 # Create logs directory
 logs_dir = Path(__file__).parent / 'logs'
@@ -15,7 +9,7 @@ logs_dir.mkdir(exist_ok=True)
 # Configure logging
 log_file = logs_dir / f'app_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Set to DEBUG to capture all log levels
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[
@@ -26,6 +20,14 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 logger.info(f"Starting application, logging to {log_file}")
+
+# Import other modules after logging is configured
+import streamlit as st
+import yaml
+from core.crawler import RepositoryCrawler
+from core.tokenizer import TokenAnalyzer
+from app.components.file_tree import FileTreeComponent
+from app.components.file_viewer import FileViewer
 
 # Set page config
 st.set_page_config(

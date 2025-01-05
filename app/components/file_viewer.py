@@ -13,15 +13,21 @@ class FileViewer:
             file_path (str): Path to the file to view
             repo_root (str, optional): Root path of the repository
         """
+        logger.debug("Initializing FileViewer")
+        
         # Store repo root
         self.repo_root = Path(repo_root) if repo_root else None
+        logger.debug(f"Repository root: {self.repo_root}")
         
         # Normalize the file path
         if isinstance(file_path, str):
+            logger.debug(f"Converting string path to Path object: {file_path}")
             file_path = Path(file_path)
         self.file_path = file_path
         
-        logger.debug(f"Initializing FileViewer for {self.file_path} (repo root: {self.repo_root})")
+        logger.debug(f"Initialized FileViewer for {self.file_path}")
+        if self.repo_root:
+            logger.debug(f"Relative to repo root: {self.file_path.relative_to(self.repo_root) if self.file_path.is_relative_to(self.repo_root) else 'not relative'}")
     
     def get_language(self):
         """Get the programming language based on file extension.
@@ -30,6 +36,8 @@ class FileViewer:
             str: Language identifier for syntax highlighting
         """
         extension = self.file_path.suffix.lower()
+        logger.debug(f"Detecting language for extension: {extension}")
+        
         language_map = {
             '.py': 'python',
             '.js': 'javascript',
@@ -60,7 +68,7 @@ class FileViewer:
             '.xml': 'xml',
         }
         lang = language_map.get(extension, 'text')
-        logger.debug(f"Detected language {lang} for file {self.file_path}")
+        logger.debug(f"Detected language: {lang}")
         return lang
     
     def get_content(self):
@@ -70,41 +78,30 @@ class FileViewer:
             str: File contents or error message
         """
         try:
-            logger.debug(f"Attempting to read file: {self.file_path}")
+            if not self.repo_root:
+                error_msg = "Repository root path not provided"
+                logger.error(error_msg)
+                return error_msg
+
+            # Construct path relative to repository root
+            file_path = self.repo_root / self.file_path
+            logger.debug(f"Reading file from repository: {file_path}")
             
-            # Build list of possible paths
-            possible_paths = []
+            if not file_path.exists():
+                error_msg = f"File not found: {file_path}"
+                logger.error(error_msg)
+                return error_msg
             
-            # Try as absolute path first
-            if self.file_path.is_absolute():
-                possible_paths.append(self.file_path)
+            if not file_path.is_file():
+                error_msg = f"Not a file: {file_path}"
+                logger.error(error_msg)
+                return error_msg
             
-            # Try relative to repo root if available
-            if self.repo_root:
-                possible_paths.append(self.repo_root / self.file_path)
-            
-            # Try relative to current directory
-            possible_paths.append(Path.cwd() / self.file_path)
-            
-            # Log all paths we're going to try
-            logger.debug(f"Trying paths: {[str(p) for p in possible_paths]}")
-            
-            for path in possible_paths:
-                try:
-                    if path.exists() and path.is_file():
-                        with open(path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            logger.debug(f"Successfully read {len(content)} characters from {path}")
-                            # Store the successful path
-                            self.file_path = path
-                            return content
-                except Exception as e:
-                    logger.debug(f"Failed to read {path}: {str(e)}")
-                    continue
-            
-            error_msg = f"File not found: {self.file_path}"
-            logger.error(error_msg)
-            return error_msg
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                logger.debug(f"Successfully read {len(content)} characters from {file_path}")
+                self.file_path = file_path
+                return content
                 
         except UnicodeDecodeError as e:
             error_msg = f"Unable to decode file {self.file_path}: {str(e)}"
@@ -123,9 +120,11 @@ class FileViewer:
     
     def render(self):
         """Render the file contents with syntax highlighting."""
+        logger.debug("Starting render")
         content = self.get_content()
         language = self.get_language()
         
+        logger.debug(f"Rendering content with language: {language}")
         st.code(content, language=language)
         
         # File information
@@ -136,9 +135,13 @@ class FileViewer:
         with col1:
             st.text(f"Path: {self.file_path}")
             if self.file_path.exists():
-                st.text(f"Size: {self.file_path.stat().st_size:,} bytes")
+                size = self.file_path.stat().st_size
+                logger.debug(f"File size: {size:,} bytes")
+                st.text(f"Size: {size:,} bytes")
         
         with col2:
             st.text(f"Language: {language}")
             if self.file_path.exists():
-                st.text(f"Last modified: {self.file_path.stat().st_mtime}") 
+                mtime = self.file_path.stat().st_mtime
+                logger.debug(f"Last modified: {mtime}")
+                st.text(f"Last modified: {mtime}") 
