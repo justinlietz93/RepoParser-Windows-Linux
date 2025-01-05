@@ -1,47 +1,50 @@
 import streamlit as st
-from typing import Dict, List
+from pathlib import Path
 
-def render_file_tree(tree_str: str) -> None:
-    """
-    Render the file tree structure.
-    
-    Args:
-        tree_str: String representation of the directory tree
-    """
-    lines = tree_str.split('\n')
-    
-    # Create expandable sections for directories
-    current_path: List[str] = []
-    sections: Dict[str, List[str]] = {"": []}
-    
-    for line in lines:
-        indent = len(line) - len(line.lstrip())
-        depth = indent // 4
+class FileTreeComponent:
+    def __init__(self, file_tree):
+        """Initialize the file tree component.
         
-        # Adjust current path based on depth
-        current_path = current_path[:depth]
+        Args:
+            file_tree (dict): Dictionary representing the file tree structure
+        """
+        self.file_tree = file_tree
         
-        if "[" in line and "]" in line:
-            # Directory
-            dir_name = line.strip()[1:-2]  # Remove [ and /]
-            current_path.append(dir_name)
-            path_key = "/".join(current_path)
-            sections[path_key] = []
-        else:
-            # File
-            if current_path:
-                path_key = "/".join(current_path)
-                sections[path_key].append(line.strip())
+    def _render_tree_recursive(self, tree, path=""):
+        """Recursively render the file tree structure.
+        
+        Args:
+            tree (dict): Current subtree to render
+            path (str): Current path in the tree
+        
+        Returns:
+            str or None: Selected file path if a file is clicked, None otherwise
+        """
+        selected_file = None
+        
+        for name, item in sorted(tree.items()):
+            current_path = str(Path(path) / name)
+            
+            if isinstance(item, dict):
+                # Directory
+                st.markdown(f"📁 **{name}**")
+                with st.container():
+                    st.markdown("&nbsp;&nbsp;&nbsp;&nbsp;", unsafe_allow_html=True)
+                    selected = self._render_tree_recursive(item, current_path)
+                    if selected:
+                        selected_file = selected
             else:
-                sections[""].append(line.strip())
+                # File
+                if st.button(f"📄 {name}", key=current_path):
+                    selected_file = current_path
+        
+        return selected_file
     
-    # Render tree with expandable sections
-    for path, items in sections.items():
-        if path:
-            with st.expander(f"📁 {path.split('/')[-1]}"):
-                for item in items:
-                    st.text(f"📄 {item}")
-        else:
-            for item in items:
-                if item:
-                    st.text(f"📄 {item}") 
+    def render(self):
+        """Render the file tree component.
+        
+        Returns:
+            str or None: Selected file path if a file is clicked, None otherwise
+        """
+        st.markdown("### Repository Structure")
+        return self._render_tree_recursive(self.file_tree) 
