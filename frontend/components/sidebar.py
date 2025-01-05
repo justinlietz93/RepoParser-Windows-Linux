@@ -91,50 +91,115 @@ class SidebarComponent:
             st.title("Repository Crawler 🔍")
             
             # Config file upload
-            st.markdown("### Configuration")
-            uploaded_file = st.file_uploader(
-                "Upload a custom config.yaml file",
-                type=['yaml', 'yml'],
-                help="Upload a configuration file to load settings",
-                key="config_uploader"
-            )
-            
-            if uploaded_file:
-                if self.load_config_file(uploaded_file):
-                    st.success("Configuration loaded successfully!")
-                    # Clear the file uploader state
-                    st.session_state.config_uploader = None
-                    st.rerun()
+            with st.expander("Configuration", expanded=True):
+                if 'loaded_config' not in st.session_state:
+                    st.session_state.loaded_config = None
+                if 'loaded_rules' not in st.session_state:
+                    st.session_state.loaded_rules = {}
+                
+                if st.session_state.loaded_config:
+                    st.success(f"Using config: {st.session_state.loaded_config}")
+                    if st.button("❌ Clear Config"):
+                        st.session_state.loaded_config = None
+                        st.session_state.loaded_rules = {}
+                        st.session_state.config = self.default_config.copy()
+                        self.save_config(self.default_config)
+                        st.rerun()
+                else:
+                    uploaded_file = st.file_uploader(
+                        "Upload system files",
+                        type=['yaml', 'yml', 'md', 'txt', 'cursorrules'],
+                        help="Upload config.yaml, system instructions, prompt, or rule files",
+                        key="config_uploader"
+                    )
+                    
+                    if uploaded_file:
+                        if uploaded_file.name.endswith(('.yaml', '.yml')):
+                            if self.load_config_file(uploaded_file):
+                                st.success("Configuration loaded successfully!")
+                                st.session_state.loaded_config = uploaded_file.name
+                                st.rerun()
+                        else:
+                            # Store other file contents in session state
+                            content = uploaded_file.getvalue().decode('utf-8')
+                            st.session_state.loaded_rules[uploaded_file.name] = content
+                            st.success(f"Rule file loaded: {uploaded_file.name}")
+                
+                # Show loaded rule files
+                if st.session_state.loaded_rules:
+                    st.markdown("#### Loaded Rule Files:")
+                    for filename in st.session_state.loaded_rules:
+                        st.markdown(f"- {filename}")
+                        if st.button(f"❌", key=f"remove_{filename}", help=f"Remove {filename}"):
+                            del st.session_state.loaded_rules[filename]
+                            st.rerun()
             
             # Repository path
-            st.markdown("### Repository")
-            repo_path = st.text_input(
-                "Path",
-                value=st.session_state.config.get('local_root', ''),
-                help="Enter the full path to your local repository",
-                placeholder="C:/path/to/repository"
-            )
-            
-            if repo_path != st.session_state.config.get('local_root', ''):
-                st.session_state.config['local_root'] = repo_path
-                self.save_config({'local_root': repo_path})
+            with st.expander("Repository", expanded=True):
+                repo_path = st.text_input(
+                    "Path",
+                    value=st.session_state.config.get('local_root', ''),
+                    help="Enter the full path to your local repository",
+                    placeholder="C:/path/to/repository"
+                )
+                
+                if repo_path != st.session_state.config.get('local_root', ''):
+                    st.session_state.config['local_root'] = repo_path
+                    self.save_config({'local_root': repo_path})
             
             # Show ignore patterns
-            with st.expander("Ignore Patterns", expanded=False):
-                st.markdown("#### Currently Ignored")
-                
-                # Show directories
-                st.markdown("**Directories:**")
+            st.markdown("### Ignored Patterns")
+            
+            # Show directories in expander
+            with st.expander("Directories", expanded=False):
                 dirs = st.session_state.config.get('ignore_patterns', {}).get('directories', [])
-                if dirs:
-                    st.code("\n".join(dirs))
-                
-                # Show files
-                st.markdown("**Files:**")
+                dirs_text = st.text_area(
+                    "Edit directories to ignore (one per line)",
+                    value="\n".join(dirs) if dirs else "",
+                    height=200,
+                    label_visibility="collapsed",
+                    key="ignore_dirs"
+                )
+                if dirs_text != "\n".join(dirs):
+                    new_dirs = [d.strip() for d in dirs_text.split("\n") if d.strip()]
+                    st.session_state.config['ignore_patterns']['directories'] = new_dirs
+                    # Preserve loaded config state
+                    current_config = st.session_state.config.copy()
+                    self.save_config(current_config)
+                    # Force crawler refresh
+                    if 'current_tree' in st.session_state:
+                        del st.session_state.current_tree
+                    st.rerun()
+            
+            # Show files in expander
+            with st.expander("Files", expanded=False):
                 files = st.session_state.config.get('ignore_patterns', {}).get('files', [])
-                if files:
-                    st.code("\n".join(files))
-                
-                st.markdown("*Edit config.yaml to modify ignore patterns*")
+                files_text = st.text_area(
+                    "Edit files to ignore (one per line)",
+                    value="\n".join(files) if files else "",
+                    height=200,
+                    label_visibility="collapsed",
+                    key="ignore_files"
+                )
+                if files_text != "\n".join(files):
+                    new_files = [f.strip() for f in files_text.split("\n") if f.strip()]
+                    st.session_state.config['ignore_patterns']['files'] = new_files
+                    # Preserve loaded config state
+                    current_config = st.session_state.config.copy()
+                    self.save_config(current_config)
+                    # Force crawler refresh
+                    if 'current_tree' in st.session_state:
+                        del st.session_state.current_tree
+                    st.rerun()
+            
+            # Add direct download button for config
+            config_str = yaml.dump(st.session_state.config, default_flow_style=False)
+            st.download_button(
+                "💾 Save Configs",
+                config_str,
+                file_name="config.yaml",
+                mime="application/x-yaml",
+                help="Download current configuration as config.yaml"
+            )
             
             return repo_path 

@@ -31,6 +31,8 @@ ignore_patterns:
   - .terraform
   - vendor
   files:
+  - '*.git'
+  - '*.txt'
   - '*.pyc'
   - '*.pyo'
   - '*.pyd'

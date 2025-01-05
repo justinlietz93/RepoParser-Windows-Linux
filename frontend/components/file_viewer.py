@@ -124,13 +124,12 @@ class FileViewer:
             Optional[str]: File contents or None if error
         """
         try:
-            if not self.repo_root:
-                logger.error("Repository root path not provided")
-                return None
-
-            # Construct path relative to repository root
-            file_path = self.repo_root / self.file_path
-            logger.debug(f"Reading file from repository: {file_path}")
+            # Handle both absolute and relative paths
+            file_path = Path(self.file_path)
+            if not file_path.is_absolute() and self.repo_root:
+                file_path = self.repo_root / file_path
+            
+            logger.debug(f"Reading file: {file_path}")
             
             if not file_path.exists():
                 logger.error(f"File not found: {file_path}")

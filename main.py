@@ -7,7 +7,7 @@ logs_dir = Path(__file__).parent / 'logs'
 logs_dir.mkdir(exist_ok=True)
 
 # Configure logging - single file per run with reduced verbosity
-log_file = logs_dir / f'repo_crawler_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+log_file = logs_dir / f'repo_crawler_{datetime.now().strftime("%Y%m%d")}.log'
 
 # Only configure if logging hasn't been configured yet
 if not logging.getLogger().hasHandlers():
