@@ -42,6 +42,9 @@ Thumbs.db
 # Memory
 memory.json
 
-# # Cursor
+# Cursor
 .cursorrules
 
+# Logs
+logs/*.log
+changelogrules.md

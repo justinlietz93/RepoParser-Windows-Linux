@@ -41,126 +41,65 @@ A powerful Python-based tool that analyzes local repositories and generates stru
 
 3. Install dependencies:
    ```bash
-   # First, upgrade pip
-   python -m pip install --upgrade pip
-
-   # Install core dependencies
-   pip install pyyaml streamlit tiktoken pathlib
-
-   # Or install all dependencies from requirements.txt
    pip install -r requirements.txt
-   ```
-
-   If you encounter any errors, try installing dependencies individually:
-   ```bash
-   pip install pyyaml
-   pip install streamlit
-   pip install tiktoken
-   pip install pathlib
-   ```
-
-4. Verify installation:
-   ```bash
-   python -c "import yaml; import streamlit; import tiktoken; print('All dependencies installed successfully!')"
    ```
 
 ### Running the App
 
-1. Start the application:
+1. Start the Streamlit application:
    ```bash
-   python main.py
+   streamlit run main.py
    ```
 
-2. The script will prompt you for:
-   - Repository path to analyze
-   - Model selection for token analysis
-   - Output preferences
+2. The web interface will open in your default browser
 
-3. Results will be saved in the `prompts` directory
+### Using the Interface
 
-### Basic Usage
+1. **Repository Configuration**:
+   - Enter your repository path in the sidebar
+   - Add/remove file extensions to analyze
+   - Manage ignore patterns for files and directories
 
-1. **Repository Analysis**:
-   - Provide the full path to your local repository
-   - Select an AI model for token analysis
-   - The script will analyze the repository structure
+2. **File Navigation**:
+   - Browse the interactive file tree in the left panel
+   - Click on files to view their contents
+   - Directories expand/collapse on click
 
-2. **View Results**:
-   - Check the generated file tree
-   - Review file contents with syntax highlighting
-   - See token analysis and cost estimates
-
-3. **Configure Settings**:
-   - Edit config/config.yaml for customization
-   - Adjust file extensions to include/exclude
-   - Modify ignore patterns for files/directories
-   - Set logging preferences
+3. **File Analysis**:
+   - View syntax-highlighted file contents
+   - See file metadata and statistics
+   - Get token analysis and cost estimates
 
 ## Configuration
 
-The application can be configured by editing `config/config.yaml`:
+The application maintains configuration in `config/config.yaml`, but you can manage all settings through the UI:
 
-```yaml
-# Example configuration
-# Directory settings
-local_root: "C:\\Github\\path\\to\\your\\project"
-output_directory: "prompts"
-output_filename: "example_generated_prompt.txt"
+- File extensions to include
+- Directories and files to ignore
+- Output preferences
+- Logging settings
 
-# File extensions to include
-included_extensions:
-  - ".py"
-  - ".ipynb"
-  - ".html"
-  - ".css"
-  - ".js"
-  - ".jsx"
-  - ".md"
-  - ".rst"
+## Supported Languages
 
-# Ignore patterns
-ignore_patterns:
-  directories:
-    - ".git"
-    - ".github"
-    - "__pycache__"
-    - "node_modules"
-    - "venv"
-    - ".venv"
-    - "env"
-    - ".env"
-    - "build"
-    - "dist"
-    - ".idea"
-    - ".vscode"
-    - "vendor"
-    - "site-packages"
-    - "tests"  # Custom ignore
-    - "docs"   # Custom ignore
-  files:
-    - "*.pyc"
-    - "*.pyo"
-    - "*.pyd"
-    - "*.so"
-    - "*.dll"
-    - "*.dylib"
-    - "*.egg-info"
-    - "*.egg"
-    - "*.whl"
-    - ".DS_Store"
-    - "Thumbs.db"
-    - "*.log"
-    - ".env"
-    - ".gitignore"
-    - "*.lock"
-    - "package-lock.json"
-    - "*.md"      # Custom ignore
-    - "*.test.js" # Custom ignore
-
-# Logging configuration
-logging:
-  level: "INFO"
-  format: "%(asctime)s - %(levelname)s - %(message)s"
-  datefmt: "%Y-%m-%d %H:%M:%S"
-
-```
+The file viewer supports syntax highlighting for:
+- Python (.py)
+- JavaScript (.js, .jsx)
+- TypeScript (.ts, .tsx)
+- HTML (.html)
+- CSS (.css)
+- JSON (.json)
+- YAML (.yaml, .yml)
+- Markdown (.md)
+- Shell scripts (.sh, .bash)
+- SQL (.sql)
+- C/C++ (.c, .cpp, .h)
+- Java (.java)
+- Go (.go)
+- Rust (.rs)
+- PHP (.php)
+- Ruby (.rb)
+- Swift (.swift)
+- Kotlin (.kt)
+- R (.r)
+- XML (.xml)
+- Dockerfiles
