@@ -97,14 +97,38 @@ class FileViewer:
                 logger.error(error_msg)
                 return error_msg
             
+            # Check file size
+            file_size = file_path.stat().st_size
+            if file_size > 1024 * 1024:  # 1MB
+                return f"File is too large ({file_size / (1024*1024):.1f} MB). Please use a text editor for large files."
+            
+            # Try to detect if file is binary
+            try:
+                with open(file_path, 'rb') as f:
+                    chunk = f.read(1024)
+                    if b'\x00' in chunk:
+                        return "This appears to be a binary file and cannot be displayed"
+                    
+                    # Check for high concentration of non-ASCII characters
+                    non_ascii = len([b for b in chunk if b > 127])
+                    if non_ascii > len(chunk) * 0.3:  # More than 30% non-ASCII
+                        return "This appears to be a binary file and cannot be displayed"
+            except Exception as e:
+                logger.error(f"Error checking file type: {str(e)}")
+                return f"Error checking file type: {str(e)}"
+            
+            # Read file in chunks
+            content = []
             with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                logger.debug(f"Successfully read {len(content)} characters from {file_path}")
-                self.file_path = file_path
-                return content
+                while chunk := f.read(8192):  # 8KB chunks
+                    content.append(chunk)
+                    if len(''.join(content)) > 1024 * 1024:  # Stop if exceeds 1MB
+                        content.append("\n... File truncated (too large) ...")
+                        break
+                return ''.join(content)
                 
         except UnicodeDecodeError as e:
-            error_msg = f"Unable to decode file {self.file_path}: {str(e)}"
+            error_msg = f"Unable to decode file {self.file_path} - this may be a binary file"
             logger.error(error_msg)
             return error_msg
             

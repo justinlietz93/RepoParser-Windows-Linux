@@ -25,6 +25,14 @@ def save_config():
 
 def render_sidebar():
     """Render the sidebar with configuration options."""
+    # Initialize sidebar state
+    if 'sidebar_state' not in st.session_state:
+        st.session_state.sidebar_state = {
+            'about_expanded': True,
+            'ignore_expanded': True,
+            'settings_expanded': False
+        }
+    
     with st.sidebar:
         st.title("Repository Crawler 🔍")
         
@@ -40,6 +48,7 @@ def render_sidebar():
             st.session_state.config['local_root'] = repo_path
             save_config()
         
+        # About section
         with st.expander("About File Scanning", expanded=True):
             st.markdown("""
             By default, all files in the repository will be scanned unless explicitly ignored.
@@ -105,7 +114,7 @@ def render_sidebar():
                             save_config()
                             st.rerun()
         
-        # Add settings section
+        # Settings section
         with st.expander("Settings", expanded=False):
             st.markdown("##### Token Analysis Model")
             model = st.selectbox(
@@ -145,7 +154,7 @@ def render_file_explorer(repo_path):
                     st.session_state.selected_file = selected_file
             
             with content_col:
-                if st.session_state.selected_file:
+                if hasattr(st.session_state, 'selected_file') and st.session_state.selected_file:
                     st.subheader("File Content")
                     file_viewer = FileViewer(
                         st.session_state.selected_file,
@@ -171,15 +180,28 @@ def render_file_explorer(repo_path):
 
 def render_dashboard():
     """Main dashboard rendering function."""
+    # Initialize persistent state
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = 0
+    
     # Navigation tabs
     tab1, tab2 = st.tabs(["Codebase Overview", "File Explorer"])
     
     # Render sidebar and get repo path
     repo_path = render_sidebar()
     
-    # Render main content
+    # Render main content based on selected tab
     with tab1:
         render_codebase_view()
     
     with tab2:
-        render_file_explorer(repo_path) 
+        if repo_path:
+            with st.spinner("Analyzing repository..."):
+                render_file_explorer(repo_path)
+        else:
+            st.info("Please enter a valid repository path in the sidebar to begin analysis.")
+    
+    # Update active tab based on user selection
+    for i, tab in enumerate([tab1, tab2]):
+        if tab.selected:
+            st.session_state.active_tab = i 

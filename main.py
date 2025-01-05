@@ -1,27 +1,36 @@
 import logging
 from pathlib import Path
 from datetime import datetime
-import streamlit as st
-import yaml
 
-# Create logs directory
+# Create logs directory and configure logging BEFORE any other imports
 logs_dir = Path(__file__).parent / 'logs'
 logs_dir.mkdir(exist_ok=True)
 
-# Configure logging
-log_file = logs_dir / f'app_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()
-    ]
-)
+# Configure logging - single file per run with reduced verbosity
+log_file = logs_dir / f'repo_crawler_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+
+# Only configure if logging hasn't been configured yet
+if not logging.getLogger().hasHandlers():
+    logging.basicConfig(
+        level=logging.INFO,  # Changed from DEBUG to INFO
+        format='%(asctime)s [%(levelname)s] %(message)s',  # Simplified format
+        datefmt='%Y-%m-%d %H:%M:%S',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+    
+    # Configure all loggers to use the same level
+    for logger_name in logging.root.manager.loggerDict:
+        logging.getLogger(logger_name).setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
-logger.info(f"Starting application, logging to {log_file}")
+logger.info("Starting Repository Crawler")
+
+# Other imports after logging is configured
+import streamlit as st
+import yaml
 
 def initialize_session_state():
     """Initialize the session state with configuration."""

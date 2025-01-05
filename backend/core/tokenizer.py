@@ -124,6 +124,23 @@ class TokenAnalyzer:
         self.cache = {}
         self.logger = logging.getLogger(__name__)
     
+    def count_tokens(self, text: str) -> int:
+        """
+        Count tokens in text.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Number of tokens
+        """
+        try:
+            token_count, _ = self.calculator.count_tokens(text, self.model)
+            return token_count
+        except Exception as e:
+            self.logger.error(f"Error counting tokens: {str(e)}")
+            return 0
+
     def analyze_content(self, content: str) -> Dict[str, Any]:
         """
         Analyze content and return UI-friendly results.

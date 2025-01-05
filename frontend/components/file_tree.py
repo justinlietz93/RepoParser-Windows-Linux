@@ -9,78 +9,84 @@ class FileTreeComponent:
         """Initialize the file tree component."""
         self.root_path = Path(file_tree['path'])
         self.initialize_state()
-    
+
     def initialize_state(self):
         """Initialize session state for tree expansion state."""
-        if 'tree_state' not in st.session_state:
-            st.session_state.tree_state = {}
-    
-    def toggle_dir(self, path):
-        """Toggle directory expansion state."""
-        if path not in st.session_state.tree_state:
-            st.session_state.tree_state[path] = True  # Expanded by default
-        else:
-            st.session_state.tree_state[path] = not st.session_state.tree_state[path]
-    
-    def is_expanded(self, path):
-        """Check if directory is expanded."""
-        return st.session_state.tree_state.get(path, True)
-    
-    def render_tree_node(self, path, name, is_dir, level=0):
-        """Render a single tree node (file or directory)."""
-        indent = "    " * level
-        
-        if is_dir:
-            # Directory node
-            col1, col2 = st.columns([20, 1])
-            with col1:
-                expanded = self.is_expanded(str(path))
-                icon = "📂 " if expanded else "📁 "
-                if st.button(f"{indent}{icon}{name}/", key=f"dir_{path}"):
-                    self.toggle_dir(str(path))
-                
-                if expanded:
-                    try:
-                        # Sort directories first, then files
-                        items = sorted(path.iterdir(), 
-                                    key=lambda x: (not x.is_dir(), x.name.lower()))
-                        for item in items:
-                            self.render_tree_node(
-                                item,
-                                item.name,
-                                item.is_dir(),
-                                level + 1
-                            )
-                    except Exception as e:
-                        logger.error(f"Error reading directory {path}: {str(e)}")
-                        st.error(f"Error reading directory: {str(e)}")
-        else:
-            # File node
-            col1, col2 = st.columns([20, 1])
-            with col1:
-                if st.button(f"{indent}📄 {name}", key=f"file_{path}"):
-                    return str(path)
-        
-        return None
-    
-    def render(self):
-        """Render the entire file tree."""
-        st.markdown("### Repository Structure")
-        
-        selected_file = None
-        
+        if 'selected_node' not in st.session_state:
+            st.session_state.selected_node = None
+        if 'expanded_nodes' not in st.session_state:
+            st.session_state.expanded_nodes = set()
+
+    def render_tree_node(self, path: Path, level: int = 0):
+        """Render a tree node and its children using checkboxes."""
         try:
-            # Sort directories first, then files
-            items = sorted(self.root_path.iterdir(), 
-                         key=lambda x: (not x.is_dir(), x.name.lower()))
+            # Sort items: directories first, then files
+            items = sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
             
             for item in items:
-                result = self.render_tree_node(item, item.name, item.is_dir())
-                if result:
-                    selected_file = result
+                indent = "│   " * level
+                is_dir = item.is_dir()
+                
+                # Create a row for each item
+                cols = st.columns([0.05, 0.85, 0.1])
+                
+                if is_dir:
+                    # Directory node with inline checkbox
+                    with cols[0]:
+                        is_expanded = st.checkbox(
+                            label=f"Toggle {item.name}",
+                            key=f"dir_{item}",
+                            value=str(item) in st.session_state.expanded_nodes,
+                            label_visibility="collapsed"
+                        )
+                        
+                        if is_expanded and str(item) not in st.session_state.expanded_nodes:
+                            st.session_state.expanded_nodes.add(str(item))
+                        elif not is_expanded and str(item) in st.session_state.expanded_nodes:
+                            st.session_state.expanded_nodes.remove(str(item))
+                    
+                    with cols[1]:
+                        prefix = "└── " if level > 0 else ""
+                        st.markdown(f"{indent}{prefix}📁 {item.name}/", unsafe_allow_html=True)
+                    
+                    # Render children if expanded
+                    if is_expanded:
+                        self.render_tree_node(item, level + 1)
+                else:
+                    # File node with select button
+                    with cols[1]:
+                        prefix = "└── " if level > 0 else ""
+                        st.markdown(f"{indent}{prefix}📄 {item.name}", unsafe_allow_html=True)
+                    with cols[2]:
+                        if st.button(
+                            "📋",
+                            key=f"select_{item}",
+                            help=f"Select {item.name}",
+                            use_container_width=True
+                        ):
+                            st.session_state.selected_node = str(item)
+                            return str(item)
+                            
+        except Exception as e:
+            logger.error(f"Error processing {path}: {str(e)}")
+            st.error(f"Error accessing {path}")
+            return None
+
+    def render(self):
+        """Render the file tree."""
+        st.markdown("### Repository Structure")
         
+        try:
+            # Create a container for the tree
+            tree_container = st.container()
+            with tree_container:
+                selected_file = self.render_tree_node(self.root_path)
+                if selected_file and selected_file != st.session_state.selected_node:
+                    st.session_state.selected_node = selected_file
+            
+            return st.session_state.selected_node
+            
         except Exception as e:
             logger.error(f"Error rendering file tree: {str(e)}")
             st.error(f"Error rendering file tree: {str(e)}")
-        
-        return selected_file 
+            return None 
