@@ -5,93 +5,106 @@ import fnmatch
 import yaml
 from pathlib import Path
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
 class RepositoryCrawler:
     """Handles repository traversal and file analysis."""
     
-    def __init__(self, config_path: str = "config/config.yaml"):
-        """Initialize the crawler with configuration."""
+    def __init__(self, root_path: str, config: Optional[Dict] = None):
+        """
+        Initialize the crawler.
+        
+        Args:
+            root_path: Path to repository root
+            config: Configuration dictionary. If None, loads from config.yaml
+        """
         self.logger = logging.getLogger(__name__)
-        self.config = self._load_config(config_path)
+        self.root_path = Path(root_path)
+        self.logger.info(f"Initializing RepositoryCrawler for path: {self.root_path}")
+        
+        if config is None:
+            self.logger.debug("No config provided, loading from config.yaml")
+            self.config = self._load_config("config/config.yaml")
+        else:
+            self.logger.debug("Using provided config dictionary")
+            self.config = config
+            
+        # Ensure ignore_patterns exists
+        if 'ignore_patterns' not in self.config:
+            self.config['ignore_patterns'] = {'directories': [], 'files': []}
+            
+        self.logger.info(f"Ignoring {len(self.config.get('ignore_patterns', {}).get('directories', []))} directories")
+        self.logger.info(f"Ignoring {len(self.config.get('ignore_patterns', {}).get('files', []))} file patterns")
         
     def _load_config(self, config_path: str) -> Dict:
         """Load configuration from yaml file."""
         try:
+            self.logger.debug(f"Loading config from: {config_path}")
             with open(config_path, 'r') as f:
-                return yaml.safe_load(f)
+                config = yaml.safe_load(f)
+            self.logger.debug("Config loaded successfully")
+            return config
         except Exception as e:
-            self.logger.error(f"Error loading config: {str(e)}")
+            self.logger.error(f"Error loading config from {config_path}: {str(e)}")
             raise
             
-    def crawl(self, root_path: str) -> Tuple[str, List[Tuple[int, str]]]:
+    def get_file_tree(self) -> Dict:
         """
-        Crawl the repository and generate directory tree.
+        Generate a hierarchical file tree structure.
         
-        Args:
-            root_path: Path to repository root
-            
         Returns:
-            Tuple containing directory tree string and list of file paths
+            Dictionary representing the file tree
         """
-        self.logger.info(f"Starting repository crawl at: {root_path}")
-        return self._build_directory_tree(
-            root_path,
-            self.config['included_extensions'],
-            self.config['ignore_patterns']
-        )
-        
-    def _build_directory_tree(
-        self,
-        root_path: str,
-        included_extensions: List[str],
-        ignore_patterns: Dict[str, List[str]],
-        indent: int = 0
-    ) -> Tuple[str, List[Tuple[int, str]]]:
-        """Build directory tree structure."""
-        tree_str = ""
-        file_paths = []
-        
+        self.logger.info("Generating file tree structure")
+        tree = {}
         try:
-            items = sorted(os.listdir(root_path))
+            self._build_tree_dict(self.root_path, tree)
+            self.logger.info("File tree generated successfully")
+            return tree
+        except Exception as e:
+            self.logger.error(f"Error generating file tree: {str(e)}")
+            raise
+            
+    def _build_tree_dict(self, path: Path, tree: Dict) -> None:
+        """Recursively build a dictionary representation of the directory tree."""
+        try:
+            for item in sorted(path.iterdir()):
+                if item.is_dir():
+                    if self._should_ignore_dir(item.name):
+                        self.logger.debug(f"Ignoring directory: {item}")
+                        continue
+                    self.logger.debug(f"Processing directory: {item}")
+                    tree[item.name] = {}
+                    self._build_tree_dict(item, tree[item.name])
+                else:
+                    if self._should_ignore_file(item.name):
+                        self.logger.debug(f"Ignoring file: {item}")
+                        continue
+                    self.logger.debug(f"Including file: {item}")
+                    tree[item.name] = None
         except PermissionError:
-            self.logger.warning(f"Permission denied: {root_path}")
-            return tree_str, file_paths
-            
-        for item in items:
-            item_path = Path(root_path) / item
-            
-            if item_path.is_dir():
-                if self._should_ignore_dir(item, ignore_patterns):
-                    continue
-                    
-                tree_str += '    ' * indent + f"[{item}/]\n"
-                sub_tree, sub_paths = self._build_directory_tree(
-                    str(item_path),
-                    included_extensions,
-                    ignore_patterns,
-                    indent + 1
-                )
-                tree_str += sub_tree
-                file_paths.extend(sub_paths)
-            else:
-                if self._should_ignore_file(item, ignore_patterns):
-                    continue
-                    
-                tree_str += '    ' * indent + f"{item}\n"
-                if self._is_included_file(item, included_extensions):
-                    file_paths.append((indent, str(item_path)))
-                    
-        return tree_str, file_paths
-        
-    def _should_ignore_dir(self, dirname: str, ignore_patterns: Dict[str, List[str]]) -> bool:
+            self.logger.warning(f"Permission denied accessing: {path}")
+        except Exception as e:
+            self.logger.error(f"Error processing directory {path}: {str(e)}")
+            raise
+                  
+    def _should_ignore_dir(self, dirname: str) -> bool:
         """Check if directory should be ignored."""
-        return any(fnmatch.fnmatch(dirname, pattern) 
-                  for pattern in ignore_patterns['directories'])
+        patterns = self.config.get('ignore_patterns', {}).get('directories', [])
+        should_ignore = any(fnmatch.fnmatch(dirname, pattern) for pattern in patterns)
+        if should_ignore:
+            self.logger.debug(f"Directory {dirname} matches ignore pattern")
+        return should_ignore
                   
-    def _should_ignore_file(self, filename: str, ignore_patterns: Dict[str, List[str]]) -> bool:
+    def _should_ignore_file(self, filename: str) -> bool:
         """Check if file should be ignored."""
-        return any(fnmatch.fnmatch(filename, pattern) 
-                  for pattern in ignore_patterns['files'])
-                  
-    def _is_included_file(self, filename: str, extensions: List[str]) -> bool:
-        """Check if file should be included based on extension."""
-        return any(filename.lower().endswith(ext) for ext in extensions) 
+        patterns = self.config.get('ignore_patterns', {}).get('files', [])
+        should_ignore = any(fnmatch.fnmatch(filename, pattern) for pattern in patterns)
+        if should_ignore:
+            self.logger.debug(f"File {filename} matches ignore pattern")
+        return should_ignore 
