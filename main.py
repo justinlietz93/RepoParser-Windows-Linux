@@ -1,52 +1,23 @@
 import os
 import logging
 import fnmatch
+import yaml
 
-# Add default ignore patterns at the top of the file
-DEFAULT_IGNORE_PATTERNS = {
-    'directories': {
-        '.git',
-        '.github',
-        '__pycache__',
-        'node_modules',
-        'venv',
-        '.venv',
-        'env',
-        '.env',
-        'build',
-        'dist',
-        '.idea',
-        '.vscode',
-        'vendor',
-        'site-packages',
-    },
-    'files': {
-        '*.pyc',
-        '*.pyo',
-        '*.pyd',
-        '*.so',
-        '*.dll',
-        '*.dylib',
-        '*.egg-info',
-        '*.egg',
-        '*.whl',
-        '.DS_Store',
-        'Thumbs.db',
-        '*.log',
-        '.env',
-        '.gitignore',
-        '*.lock',
-        'package-lock.json',
-    }
-}
+def load_config():
+    """Load configuration from config.yaml"""
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
+    try:
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        raise Exception(f"Error loading config file: {str(e)}")
 
-# Add logging configuration at the top of the file
-def setup_logging():
-    """Configure logging with a specific format"""
+def setup_logging(config):
+    """Configure logging with settings from config"""
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        level=getattr(logging, config['logging']['level']),
+        format=config['logging']['format'],
+        datefmt=config['logging']['datefmt']
     )
 
 def build_local_directory_tree(
@@ -59,20 +30,14 @@ def build_local_directory_tree(
     Recursively builds a string representation of the directory structure 
     and returns a list of file paths (with indentation levels) for files 
     that match the included_extensions.
-    
-    Args:
-        root_path: The starting directory path
-        indent: Current indentation level
-        included_extensions: Tuple of file extensions to include
-        ignore_patterns: Dict with 'directories' and 'files' sets of patterns to ignore
     """
     logger = logging.getLogger(__name__)
     
     if included_extensions is None:
-        included_extensions = ('.py', '.ipynb', '.html', '.css', '.js', '.jsx', '.md', '.rst')
+        included_extensions = tuple(config['included_extensions'])
     
     if ignore_patterns is None:
-        ignore_patterns = DEFAULT_IGNORE_PATTERNS
+        ignore_patterns = config['ignore_patterns']
     
     logger.info(f"Scanning directory: {root_path}")
     tree_str = ""
@@ -87,7 +52,6 @@ def build_local_directory_tree(
     for item in items:
         item_full_path = os.path.join(root_path, item)
         
-        # Check if directory should be ignored
         if os.path.isdir(item_full_path):
             if any(fnmatch.fnmatch(item, pattern) for pattern in ignore_patterns['directories']):
                 logger.debug(f"Ignoring directory (matched ignore pattern): {item_full_path}")
@@ -104,7 +68,6 @@ def build_local_directory_tree(
             tree_str += sub_tree_str
             file_paths.extend(sub_file_paths)
         else:
-            # Check if file should be ignored
             if any(fnmatch.fnmatch(item, pattern) for pattern in ignore_patterns['files']):
                 logger.debug(f"Ignoring file (matched ignore pattern): {item_full_path}")
                 continue
@@ -118,11 +81,8 @@ def build_local_directory_tree(
     
     return tree_str, file_paths
 
-
 def read_file_contents(file_path):
-    """
-    Safely reads a text file and returns its contents as a string.
-    """
+    """Safely reads a text file and returns its contents as a string."""
     logger = logging.getLogger(__name__)
     try:
         logger.debug(f"Reading contents of file: {file_path}")
@@ -135,20 +95,12 @@ def read_file_contents(file_path):
         logger.error(f"Error reading file {file_path}: {str(e)}")
         return f"Error reading file: {str(e)}"
 
-
 def create_local_repo_prompt(
     root_path, 
     included_extensions=None, 
     ignore_patterns=None
 ):
-    """
-    Builds a directory structure string and then appends each file's contents.
-    
-    Args:
-        root_path: The starting directory path
-        included_extensions: Tuple of file extensions to include
-        ignore_patterns: Dict with 'directories' and 'files' sets of patterns to ignore
-    """
+    """Builds a directory structure string and then appends each file's contents."""
     logger = logging.getLogger(__name__)
     logger.info(f"Starting to process repository at: {root_path}")
     
@@ -158,14 +110,12 @@ def create_local_repo_prompt(
         ignore_patterns=ignore_patterns
     )
 
-    # Start assembling the output
     output_str = f"Directory Structure:\n{directory_tree}\n"
 
-    # Append file contents
     for indent, path in file_paths:
         logger.info(f"Adding contents of file to output: {path}")
         file_content = read_file_contents(path)
-        rel_path = os.path.relpath(path, root_path)  # relative path for neatness
+        rel_path = os.path.relpath(path, root_path)
         output_str += '\n' + '    ' * indent + f"{rel_path}:\n"
         output_str += '    ' * indent + '```\n'
         output_str += file_content
@@ -173,31 +123,31 @@ def create_local_repo_prompt(
     
     return output_str
 
-
 if __name__ == "__main__":
+    # Load configuration
+    config = load_config()
+    
     # Set up logging
-    setup_logging()
+    setup_logging(config)
     logger = logging.getLogger(__name__)
     
-    # Example usage with custom ignore patterns
-    local_root = "C:\\Github\\ticket_tracker\\ticket_tracker"
-    output_file_name = "ticket_tracker_prompt.txt"
+    # Create output directory if it doesn't exist
+    prompts_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 
+        config['output_directory']
+    )
+    if not os.path.exists(prompts_dir):
+        logger.info(f"Creating prompts directory at: {prompts_dir}")
+        os.makedirs(prompts_dir)
     
-    # Example of adding custom ignore patterns
-    custom_ignore_patterns = DEFAULT_IGNORE_PATTERNS.copy()
-    custom_ignore_patterns['directories'].update({
-        'tests',  # Ignore test directories
-        'docs',   # Ignore documentation
-    })
-    custom_ignore_patterns['files'].update({
-        '*.md',   # Ignore markdown files
-        '*.test.js',  # Ignore test files
-    })
-
-    logger.info(f"Starting script with root directory: {local_root}")
+    # Set up output file path
+    output_file_name = os.path.join(prompts_dir, config['output_filename'])
+    
+    logger.info(f"Starting script with root directory: {config['local_root']}")
     result_string = create_local_repo_prompt(
-        local_root,
-        ignore_patterns=custom_ignore_patterns
+        config['local_root'],
+        included_extensions=tuple(config['included_extensions']),
+        ignore_patterns=config['ignore_patterns']
     )
     
     logger.info(f"Writing results to file: {output_file_name}")
