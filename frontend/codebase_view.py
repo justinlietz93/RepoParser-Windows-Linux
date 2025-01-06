@@ -47,45 +47,55 @@ def build_codebase_json(repo_path, config):
     try:
         crawler = RepositoryCrawler(repo_path, config)
         analyzer = TokenAnalyzer(model=config.get('model', 'gpt-4'))
+        
+        # Get the file tree first
+        file_tree = crawler.get_file_tree()
+        if not file_tree:
+            logger.warning("No files found in repository")
+            return {}, 0
+        
         codebase_dict = {}
         total_tokens = 0
         
-        # Get list of files from crawler
-        try:
-            files_info = crawler.walk()
-            if not files_info:
-                logger.warning("No files found in repository")
-                return {}, 0
-                
-            for file_path, size in files_info:
-                try:
-                    full_path = Path(repo_path) / file_path
-                    if not full_path.is_file():
-                        logger.warning(f"File not found or not accessible: {full_path}")
-                        continue
-                        
-                    content = get_file_contents(full_path)
-                    if content is None:
-                        continue
-                        
-                    codebase_dict[str(file_path)] = {
-                        'content': content,
-                        'size': size,
-                    }
-                    total_tokens += analyzer.count_tokens(content)
-                except Exception as e:
-                    logger.error(f"Error processing {file_path}: {str(e)}")
+        def process_tree(tree_dict, current_path=""):
+            """Recursively process the file tree."""
+            for name, content in tree_dict.items():
+                if name.startswith('__'):  # Skip error entries
                     continue
-            
-            if not codebase_dict:
-                logger.warning("No valid files processed")
-                return {}, 0
+                    
+                path = Path(current_path) / name
+                full_path = Path(repo_path) / path
                 
-            return codebase_dict, total_tokens
+                if content is None:  # It's a file
+                    try:
+                        if not full_path.is_file():
+                            logger.warning(f"File not found or not accessible: {full_path}")
+                            continue
+                            
+                        file_content = get_file_contents(full_path)
+                        if file_content is None:
+                            continue
+                            
+                        codebase_dict[str(path)] = {
+                            "content": file_content,
+                            "size": full_path.stat().st_size
+                        }
+                        nonlocal total_tokens
+                        total_tokens += analyzer.count_tokens(file_content)
+                    except Exception as e:
+                        logger.error(f"Error processing {path}: {str(e)}")
+                        continue
+                else:  # It's a directory
+                    process_tree(content, path)
+        
+        # Start processing from the root
+        process_tree(file_tree['contents'])
+        
+        if not codebase_dict:
+            logger.warning("No valid files processed")
+            return {}, 0
             
-        except Exception as e:
-            logger.error(f"Error walking repository: {str(e)}")
-            raise Exception(f"Error scanning repository: {str(e)}")
+        return codebase_dict, total_tokens
             
     except Exception as e:
         logger.error(f"Error initializing repository crawler: {str(e)}")
@@ -186,11 +196,11 @@ def build_prompt(codebase_dict):
             
             # If content is a dict without 'content' key, it's a directory
             if isinstance(content, dict) and 'content' not in content:
-                lines.append(f'{indent}<{full_path}>')
+                lines.append(f'{indent}<directory name="{name}" path="{full_path}">')
                 lines.extend(write_directory(content, f"{current_path}/{name}".lstrip("/"), indent_level + 1))
-                lines.append(f'{indent}</{full_path}>')
+                lines.append(f'{indent}</directory>')
             else:  # It's a file
-                lines.append(f'{indent}<{full_path}>')
+                lines.append(f'{indent}<file name="{name}" path="{full_path}" size="{content.get("size", 0)}">')
                 lines.append(f'{indent}  <![CDATA[')
                 # Indent the content
                 content_lines = content["content"].splitlines()
@@ -199,7 +209,7 @@ def build_prompt(codebase_dict):
                 else:
                     lines.append(f'{indent}    {content["content"]}')
                 lines.append(f'{indent}  ]]>')
-                lines.append(f'{indent}</{full_path}>')
+                lines.append(f'{indent}</file>')
         
         return lines
     
@@ -245,7 +255,7 @@ def render_codebase_view():
                 with col3:
                     st.metric("Output Cost", f"${output_cost:.2f}")
                 with col4:
-                    total_size = sum(file_info['size'] for file_info in codebase_dict.values())
+                    total_size = sum(file_info.get('size', 0) for file_info in codebase_dict.values() if isinstance(file_info, dict))
                     st.metric("Total Size", f"{total_size / 1024:.1f} KB")
                 
                 # Build and display the prompt
