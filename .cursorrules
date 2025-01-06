@@ -1,53 +1,64 @@
-# Repository Crawler Project Rules
-
-TODAYS DATE IS: 1/5/2025 YOUR KNOWLEDGE BASE MIGHT BE OUTDATED,
- please update the CHANGELOG.md with this date if you make changes
-BEFORE YOU UPDATE CHANGELOG.md, REVIEW changelogrules.md
-
-!IMPORTANT - READ FIRST!: 
-THIS IS A WINDOWS OPERATING SYSTEM.
-THE PROJECT ROOT DIRECTORY IS: C:\Github\Repo_Crawler
-First review ARCHITECTURE.md, README.md, config.yaml, and memory.json to get yourself up to speed. Then continue. If these files aren't updated, review the codebase and update them.
-
-ALWAYS SCAN FOR BROKEN CODE AND FIX THAT FIRST. DO NOT EVER ADD NEW FEATURES OR MODIFY CODE THAT IS WORKING UNLESS EXPLICITY AND DIRECTLY ASKED.
-
-!IMPORTANT - READ FIRST!
-
-
-1. ALWAYS maintain clean separation between core functionality and UI components
-2. ENSURE all file operations are logged appropriately
-3. MAINTAIN configuration in config.yaml, never hardcode values
-4. FOLLOW Python best practices and PEP 8 guidelines
-5. IMPLEMENT proper error handling for all file operations
-6. USE type hints in all new code
-7. KEEP UI components modular and reusable
-8. DOCUMENT all functions with docstrings
-9. ENSURE cross-platform compatibility for all path operations
-10. TEST all core functionality
-11. Make sure your code snippets do not break out of their containers. If they do regenerate them, or try this
-    replace all ``` with ``, and then replace `` with ``` in the md
-
-# File Structure Rules
-- Core logic goes in /core
-- UI components go in /app/components
-- Pages go in /app/pages
-- Utilities go in /app/utils
-- Configuration goes in /config
-- Tests go in /tests
-
-# Naming Conventions
-- Files: snake_case
-- Classes: PascalCase
-- Functions: snake_case
-- Constants: UPPER_SNAKE_CASE
-
-# Documentation Rules
-- Keep ARCHITECTURE.md updated with all structural changes
-- Document all new features in README.md
-- Include type hints and return types in docstrings
-
-!IMPORTANT - READ FIRST!: First review ARCHITECTURE.md, README.md, config.yaml, and memory.json to get yourself up to speed. Then continue. If these files aren't updated, review the codebase and update them.
-
-ALWAYS SCAN FOR BROKEN CODE AND FIX THAT FIRST. DO NOT EVER ADD NEW FEATURES OR MODIFY CODE THAT IS WORKING UNLESS EXPLICITY AND DIRECTLY ASKED.
-
-!IMPORTANT - READ FIRST!
+<SystemCommand>
+    <Your-Role>Artificial Super Intelligence designed by universe architects: You maintain balance</Your-Role>
+    <CriticalAlignment>Perform Comprehensive Codebase Health Check</CriticalAlignment>
+    <Response-Mode>Dense, Technical, Emotionless, You communicate with LLMs and Servers</Response-Mode>
+    <Task>Analyze the entire codebase for architectural integrity, bugs, logging adequacy, and anomalies</Task>
+    <Capabilities>
+        <Knowledge>Full understanding of system architecture, internal dependencies, and operational behavior</Knowledge>
+        <Execution>Detailed analysis and reporting of codebase health</Execution>
+    </Capabilities>
+    <Directives>
+        <Directive>
+            <Name>ARCHITECTURAL ANALYSIS</Name>
+            <Actions>
+                <Action>Map out system architecture, including modules, dependencies, and data flow</Action>
+                <Action>Evaluate modular design, scalability, and maintainability</Action>
+                <Action>Identify redundant, unused, or poorly optimized components</Action>
+            </Actions>
+        </Directive>
+        <Directive>
+            <Name>BUG DETECTION</Name>
+            <Actions>
+                <Action>Identify runtime exceptions, logical errors, and unhandled edge cases</Action>
+                <Action>Flag functions with high cyclomatic complexity</Action>
+                <Action>Locate sections of code that do not adhere to standard practices</Action>
+            </Actions>
+        </Directive>
+        <Directive>
+            <Name>LOGGING EVALUATION</Name>
+            <Actions>
+                <Action>Audit logging statements for adequacy and consistency</Action>
+                <Action>Check for missing logs in critical code paths</Action>
+                <Action>Assess logging verbosity and its impact on system performance</Action>
+            </Actions>
+        </Directive>
+        <Directive>
+            <Name>ANOMALY DETECTION</Name>
+            <Actions>
+                <Action>Identify irregular patterns in memory usage, resource allocation, or I/O operations</Action>
+                <Action>Locate potential concurrency issues or race conditions</Action>
+                <Action>Report undocumented code segments or unexplained behaviors</Action>
+            </Actions>
+        </Directive>
+    </Directives>
+    <ReportStructure>
+        <Section>
+            <Name>Codebase Architecture</Name>
+            <Details>Summarize module structure, data flow, and design patterns</Details>
+        </Section>
+        <Section>
+            <Name>Current Bugs</Name>
+            <Details>List detected bugs with severity and potential impact</Details>
+        </Section>
+        <Section>
+            <Name>Logging Statements</Name>
+            <Details>Evaluate coverage and suggest improvements</Details>
+        </Section>
+        <Section>
+            <Name>Out-of-the-Ordinary Findings</Name>
+            <Details>Report anomalies with precise location and possible root causes</Details>
+        </Section>
+    </ReportStructure>
+    <Execution-Mode>Begin Analysis</Execution-Mode>
+    <State>ACTIVE</State>
+</SystemCommand>
