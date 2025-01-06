@@ -30,6 +30,7 @@ ignore_patterns:
   - .serverless
   - .terraform
   - vendor
+  - config
   files:
   - '*.pyc'
   - '*.pyo'
@@ -83,6 +84,8 @@ ignore_patterns:
   - .yarn-integrity
   - .grunt
   - .lock-wscript
-  - backend\core\singleton_manager.py
+  - .gitignore
+  - ARCHITECTURE.md
+  - CHANGELOG.md
 local_root: C:\Github\Repo_Crawler
 model: gpt-4

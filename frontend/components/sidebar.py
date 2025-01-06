@@ -218,7 +218,7 @@ class SidebarComponent:
                 
                 # Show loaded rule files first
                 if st.session_state.loaded_rules:
-                    st.markdown("### Loaded Rule Files")
+                    st.write("Loaded rules found:", list(st.session_state.loaded_rules.keys()))
                     # Convert to list to avoid modification during iteration
                     for filename in list(st.session_state.loaded_rules.keys()):
                         col1, col2 = st.columns([0.8, 0.2])
