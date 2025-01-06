@@ -28,7 +28,7 @@ def save_config(config: Dict[str, Any]) -> bool:
 
 def render():
     """Render the settings page."""
-    st.title("Settings ⚙️")
+    st.title("Advanced Settings ⚙️")
     
     # Load current configuration
     config = load_config()
@@ -37,19 +37,16 @@ def render():
         return
 
     # Create tabs for different settings categories
-    tabs = st.tabs(["General", "Extensions", "Ignore Patterns", "Logging"])
+    tabs = st.tabs(["Extensions", "Logging", "Advanced"])
 
     with tabs[0]:
-        render_general_settings(config)
-    
-    with tabs[1]:
         render_extension_settings(config)
     
-    with tabs[2]:
-        render_ignore_patterns(config)
-    
-    with tabs[3]:
+    with tabs[1]:
         render_logging_settings(config)
+    
+    with tabs[2]:
+        render_advanced_settings(config)
 
     # Save button
     if st.button("Save Settings", type="primary"):
@@ -58,24 +55,6 @@ def render():
             st.balloons()
         else:
             st.error("Failed to save settings")
-
-def render_general_settings(config: Dict[str, Any]):
-    """Render general settings section."""
-    st.header("General Settings")
-    
-    # Output directory settings
-    config['output_directory'] = st.text_input(
-        "Output Directory",
-        value=config.get('output_directory', 'prompts'),
-        help="Directory where analysis results will be saved"
-    )
-    
-    # Output filename settings
-    config['output_filename'] = st.text_input(
-        "Output Filename",
-        value=config.get('output_filename', 'repository_analysis.txt'),
-        help="Default filename for analysis results"
-    )
 
 def render_extension_settings(config: Dict[str, Any]):
     """Render file extension settings section."""
@@ -95,40 +74,6 @@ def render_extension_settings(config: Dict[str, Any]):
         ext.strip() for ext in extensions_text.split('\n')
         if ext.strip() and ext.strip().startswith('.')
     ]
-
-def render_ignore_patterns(config: Dict[str, Any]):
-    """Render ignore patterns section."""
-    st.header("Ignore Patterns")
-    
-    ignore_patterns = config.get('ignore_patterns', {'directories': [], 'files': []})
-    
-    # Directory patterns
-    st.subheader("Directory Patterns")
-    dir_patterns = st.text_area(
-        "Ignored Directories",
-        value='\n'.join(ignore_patterns.get('directories', [])),
-        help="One pattern per line (e.g., node_modules)",
-        height=150
-    )
-    ignore_patterns['directories'] = [
-        pattern.strip() for pattern in dir_patterns.split('\n')
-        if pattern.strip()
-    ]
-    
-    # File patterns
-    st.subheader("File Patterns")
-    file_patterns = st.text_area(
-        "Ignored Files",
-        value='\n'.join(ignore_patterns.get('files', [])),
-        help="One pattern per line (e.g., *.pyc)",
-        height=150
-    )
-    ignore_patterns['files'] = [
-        pattern.strip() for pattern in file_patterns.split('\n')
-        if pattern.strip()
-    ]
-    
-    config['ignore_patterns'] = ignore_patterns
 
 def render_logging_settings(config: Dict[str, Any]):
     """Render logging settings section."""
@@ -160,3 +105,35 @@ def render_logging_settings(config: Dict[str, Any]):
     )
     
     config['logging'] = logging_config
+
+def render_advanced_settings(config: Dict[str, Any]):
+    """Render advanced settings section."""
+    st.header("Advanced Settings")
+    
+    # Output settings
+    st.subheader("Output Configuration")
+    
+    # Output directory
+    config['output_directory'] = st.text_input(
+        "Output Directory",
+        value=config.get('output_directory', 'prompts'),
+        help="Directory where analysis results will be saved"
+    )
+    
+    # Output filename
+    config['output_filename'] = st.text_input(
+        "Output Filename",
+        value=config.get('output_filename', 'repository_analysis.txt'),
+        help="Default filename for analysis results"
+    )
+    
+    # Add direct download button for config
+    st.subheader("Configuration Export")
+    config_str = yaml.dump(config, default_flow_style=False)
+    st.download_button(
+        "💾 Download Configuration",
+        config_str,
+        file_name="config.yaml",
+        mime="application/x-yaml",
+        help="Download current configuration as config.yaml"
+    )
