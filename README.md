@@ -40,7 +40,7 @@ A powerful Python-based tool that quickly produces context prompts for LLMs by a
 1. Clone the repository:
 ```bash
 git clone https://github.com/justinlietz93/RepoPrompt-Windows-Linux.git
-cd repo_crawler
+cd RepoPrompt-Windows-Linux
 ```
 
 2. Create and activate a virtual environment:
