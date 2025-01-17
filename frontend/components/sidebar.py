@@ -354,13 +354,18 @@ class SidebarComponent:
         """Save configuration to config.yaml with proper locking."""
         try:
             with self._config_lock:
-                logger.info(f"Saving config: {config_data}")
+                logger.info("Saving config (excluding API keys)")
                 config_path = Path('config/config.yaml')
                 config_path.parent.mkdir(parents=True, exist_ok=True)
 
+                # Create a copy of config without API keys for file saving
+                save_data = config_data.copy()
+                save_data['api_keys'] = {}  # Clear API keys when saving to file
+                
                 with open(config_path, 'w', encoding='utf-8') as f:
-                    yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
+                    yaml.dump(save_data, f, default_flow_style=False, sort_keys=False)
 
+                # Keep the API keys in session state but not in file
                 st.session_state.config = config_data.copy()
                 return True
         except Exception as e:
@@ -370,16 +375,24 @@ class SidebarComponent:
 
     def clear_state(self):
         """Clear all sidebar-related state."""
-        st.session_state.config = self.default_config.copy()
+        # Create a fresh default config without any API keys
+        fresh_config = self.default_config.copy()
+        fresh_config['api_keys'] = {}
+        
+        st.session_state.config = fresh_config
         st.session_state.loaded_config = None
         st.session_state.loaded_rules = {}
+        
+        # Clear any cached data
         if 'current_tree' in st.session_state:
             del st.session_state.current_tree
         if 'crawler' in st.session_state:
             del st.session_state.crawler
         if 'config_hash' in st.session_state:
             del st.session_state.config_hash
-        self.save_config(self.default_config)
+            
+        # Save the cleared config to file
+        self.save_config(fresh_config)
 
     def load_config_file(self, uploaded_file) -> bool:
         """Load configuration from uploaded file."""
