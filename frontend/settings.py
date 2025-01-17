@@ -37,15 +37,18 @@ def render():
         return
 
     # Create tabs for different settings categories
-    tabs = st.tabs(["Extensions", "Logging", "Advanced"])
+    tabs = st.tabs(["LLM Settings", "Extensions", "Logging", "Advanced"])
 
     with tabs[0]:
-        render_extension_settings(config)
+        render_llm_settings(config)
     
     with tabs[1]:
-        render_logging_settings(config)
+        render_extension_settings(config)
     
     with tabs[2]:
+        render_logging_settings(config)
+    
+    with tabs[3]:
         render_advanced_settings(config)
 
     # Save button
@@ -55,6 +58,77 @@ def render():
             st.balloons()
         else:
             st.error("Failed to save settings")
+
+def render_llm_settings(config: Dict[str, Any]):
+    """Render LLM settings section."""
+    st.header("LLM Configuration")
+    
+    llm_config = config.get('llm', {})
+    
+    # LLM Provider selection
+    providers = ["OpenAI", "Anthropic", "Local Model"]
+    llm_config['provider'] = st.selectbox(
+        "LLM Provider",
+        options=providers,
+        index=providers.index(llm_config.get('provider', 'OpenAI')),
+        help="Select your LLM provider"
+    )
+    
+    # API Key input with secure handling
+    api_key = st.text_input(
+        "API Key",
+        value=llm_config.get('api_key', ''),
+        type="password",
+        help="Enter your API key (stored securely)"
+    )
+    if api_key:
+        llm_config['api_key'] = api_key
+    
+    # Model selection based on provider
+    if llm_config['provider'] == 'OpenAI':
+        models = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
+    elif llm_config['provider'] == 'Anthropic':
+        models = ["claude-3-opus", "claude-3-sonnet", "claude-2.1"]
+    else:
+        models = ["llama2", "mistral", "phi-2"]
+        
+    llm_config['model'] = st.selectbox(
+        "Model",
+        options=models,
+        index=0 if 'model' not in llm_config else models.index(llm_config['model']),
+        help="Select the model to use"
+    )
+    
+    # Advanced LLM settings
+    with st.expander("Advanced LLM Settings"):
+        llm_config['temperature'] = st.slider(
+            "Temperature",
+            min_value=0.0,
+            max_value=1.0,
+            value=llm_config.get('temperature', 0.7),
+            step=0.1,
+            help="Controls randomness in responses"
+        )
+        
+        llm_config['max_tokens'] = st.number_input(
+            "Max Tokens",
+            min_value=100,
+            max_value=32000,
+            value=llm_config.get('max_tokens', 2000),
+            step=100,
+            help="Maximum response length"
+        )
+        
+        llm_config['context_window'] = st.number_input(
+            "Context Window",
+            min_value=1000,
+            max_value=128000,
+            value=llm_config.get('context_window', 8000),
+            step=1000,
+            help="Maximum context length"
+        )
+    
+    config['llm'] = llm_config
 
 def render_extension_settings(config: Dict[str, Any]):
     """Render file extension settings section."""
