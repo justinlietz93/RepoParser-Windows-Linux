@@ -4,7 +4,7 @@ import streamlit as st
 import yaml
 from pathlib import Path
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from threading import Lock
 import subprocess
 import sys
@@ -161,6 +161,44 @@ class SidebarComponent:
             if 'api_keys' not in st.session_state.config:
                 st.session_state.config['api_keys'] = {}
 
+    def validate_repo_path(self, path: str) -> Optional[Path]:
+        """Validate and normalize repository path.
+        
+        Args:
+            path: The repository path to validate
+            
+        Returns:
+            Normalized Path object if valid, None otherwise
+        """
+        try:
+            # Convert to absolute path and normalize
+            abs_path = Path(path).resolve()
+            
+            # Basic security checks
+            if not abs_path.exists():
+                st.error("Repository path does not exist")
+                return None
+            if not abs_path.is_dir():
+                st.error("Path is not a directory")
+                return None
+                
+            # Check for directory traversal attempts
+            if ".." in str(abs_path.relative_to(abs_path.anchor)):
+                st.error("Invalid repository path: directory traversal not allowed")
+                return None
+                
+            # Additional security checks
+            if any(part.startswith('.') for part in abs_path.parts[1:]):
+                st.error("Invalid repository path: hidden directories not allowed")
+                return None
+                
+            return abs_path
+            
+        except Exception as e:
+            st.error(f"Invalid repository path: {str(e)}")
+            logger.error(f"Path validation error: {str(e)}", exc_info=True)
+            return None
+
     def render(self):
         """Render the sidebar."""
         with st.sidebar:
@@ -240,17 +278,24 @@ class SidebarComponent:
                     try:
                         selected_path = show_file_dialog()
                         if selected_path:
-                            repo_path = str(Path(selected_path))
-                            st.session_state.config['local_root'] = repo_path
-                            self.save_config(st.session_state.config)
-                            st.rerun()
+                            # Validate selected path
+                            validated_path = self.validate_repo_path(selected_path)
+                            if validated_path:
+                                repo_path = str(validated_path)
+                                st.session_state.config['local_root'] = repo_path
+                                self.save_config(st.session_state.config)
+                                st.rerun()
                     except Exception as e:
                         st.error(f"Error opening file browser: {str(e)}")
                         logger.error(f"File browser error: {str(e)}", exc_info=True)
 
+                # Validate manually entered path
                 if repo_path != st.session_state.config.get('local_root', ''):
-                    st.session_state.config['local_root'] = repo_path
-                    self.save_config(st.session_state.config)
+                    validated_path = self.validate_repo_path(repo_path)
+                    if validated_path:
+                        repo_path = str(validated_path)
+                        st.session_state.config['local_root'] = repo_path
+                        self.save_config(st.session_state.config)
 
                 # Configuration Section
                 st.markdown("### Configuration")
@@ -331,22 +376,25 @@ class SidebarComponent:
                         st.rerun()
 
             with files_tab:
-                if repo_path and Path(repo_path).exists():
-                    from frontend.components.ignore_tree import IgnoreTreeComponent
-                    config_hash = str(hash(str(st.session_state.config)))
-                    if ('crawler' not in st.session_state or
-                        'config_hash' not in st.session_state or
-                        st.session_state.config_hash != config_hash):
-                        from backend.core.crawler import RepositoryCrawler
-                        logger.info("Initializing new crawler")
-                        st.session_state.crawler = RepositoryCrawler(repo_path, st.session_state.config)
-                        st.session_state.config_hash = config_hash
+                if repo_path:
+                    # Validate path before using
+                    validated_path = self.validate_repo_path(repo_path)
+                    if validated_path and validated_path.exists():
+                        from frontend.components.ignore_tree import IgnoreTreeComponent
+                        config_hash = str(hash(str(st.session_state.config)))
+                        if ('crawler' not in st.session_state or
+                            'config_hash' not in st.session_state or
+                            st.session_state.config_hash != config_hash):
+                            from backend.core.crawler import RepositoryCrawler
+                            logger.info("Initializing new crawler")
+                            st.session_state.crawler = RepositoryCrawler(str(validated_path), st.session_state.config)
+                            st.session_state.config_hash = config_hash
 
-                    file_tree = st.session_state.crawler.get_file_tree()
-                    ignore_tree = IgnoreTreeComponent(file_tree)
-                    ignore_tree.render()
-                else:
-                    st.info("Please enter a valid repository path in the Settings tab to manage ignore patterns.")
+                        file_tree = st.session_state.crawler.get_file_tree()
+                        ignore_tree = IgnoreTreeComponent(file_tree)
+                        ignore_tree.render()
+                    else:
+                        st.info("Please enter a valid repository path in the Settings tab to manage ignore patterns.")
 
             return st.session_state.config.get('local_root', '')
 
