@@ -1,3 +1,21 @@
+"""Repository Crawler Core Module
+
+This module implements the core repository traversal and analysis functionality.
+It provides efficient caching, configurable ignore patterns, and robust error handling.
+
+Example:
+    ```python
+    config = {
+        'ignore_patterns': {
+            'directories': ['.git', '__pycache__'],
+            'files': ['*.pyc', '*.log']
+        }
+    }
+    crawler = RepositoryCrawler('/path/to/repo', config)
+    file_tree = crawler.get_file_tree()
+    ```
+"""
+
 from typing import Dict, List, Tuple, Optional, Any
 import os
 import logging
@@ -10,10 +28,29 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class RepositoryCrawler:
-    """Handles repository traversal and file analysis."""
+    """Repository traversal and analysis engine.
+    
+    This class handles repository exploration, file analysis, and tree generation
+    with efficient caching and configurable ignore patterns.
+    
+    Attributes:
+        root_path (Path): Root directory path to analyze
+        config (Dict): Configuration dictionary with ignore patterns
+        _file_tree_cache (Optional[Dict]): Cached file tree structure
+        _config_hash (Optional[str]): Hash of current configuration
+    """
     
     def __init__(self, root_path: str, config: Dict[str, Any]):
-        """Initialize the repository crawler."""
+        """Initialize the repository crawler.
+        
+        Args:
+            root_path: Path to the repository root directory
+            config: Configuration dictionary containing ignore patterns
+            
+        Raises:
+            ValueError: If root_path doesn't exist or isn't a directory
+            TypeError: If config is not properly structured
+        """
         self.root_path = Path(root_path)
         
         # Deep copy config to prevent reference issues
@@ -33,7 +70,15 @@ class RepositoryCrawler:
         logger.debug(f"Config: {self.config}")
         
     def _get_config_hash(self) -> str:
-        """Get a more reliable hash of current config for cache invalidation."""
+        """Generate a reliable hash of current config for cache invalidation.
+        
+        Returns:
+            str: Hash string representing current configuration
+            
+        Note:
+            This method ensures consistent hashing by sorting pattern lists
+            and using a stable string representation.
+        """
         try:
             # Sort lists to ensure consistent hashing
             sorted_config = {

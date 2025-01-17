@@ -34,6 +34,10 @@ import yaml
 if 'loaded_rules' not in st.session_state:
     st.session_state.loaded_rules = {}
 
+# Also ensure 'loaded_config' is defined
+if 'loaded_config' not in st.session_state:
+    st.session_state.loaded_config = None
+
 def get_default_config():
     return {
         'ignore_patterns': {

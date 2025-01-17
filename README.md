@@ -1,8 +1,28 @@
-# NOTE: This project is still in progress. Most of the functionality works, but you may run into bugs and I have more features planned.
-
-```Feel free to do whatever you want with this code, but please share it and give me credit.```
-
 # Repository Crawler 🔍
+
+> **⚠️ Project Status: Active Development**  
+> This project is under active development. While core functionality is operational, you may encounter bugs or incomplete features. See [Missing Features](#missing-features) section for planned improvements.
+
+A powerful Python-based tool that quickly produces context prompts for LLMs by analyzing local repositories and generating structured documentation with token cost estimation. Built with Streamlit, it provides an intuitive web interface for exploring codebases and understanding their token usage in the context of AI language models.
+
+## ⚡ Quickstart
+
+```bash
+# Clone repository
+git clone https://github.com/justinlietz93/RepoPrompt-Windows-Linux.git
+cd repo_crawler
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# OR
+.\venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start application
+streamlit run main.py
 
 A powerful Python-based tool that quickly produces context prompts for LLMs by analyzing local repositories and generating structured documentation with token cost estimation. Built with Streamlit, it provides an intuitive web interface for exploring codebases and understanding their token usage in the context of AI language models.
 
@@ -35,7 +55,7 @@ A powerful Python-based tool that quickly produces context prompts for LLMs by a
 - Cross-platform path handling
 - Configurable logging system
 
-## Installation
+## Detailed Installation
 
 1. Clone the repository:
 ```bash
@@ -59,7 +79,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## Usage Guide
 
 1. Start the application:
 ```bash
@@ -126,22 +146,58 @@ Repository_Crawler/
 └── tests/          # Test suite
 ```
 
-
 ## Known Issues
 - Repository traversal system needs improvement
 - XML generation formatting issues
 - UI component state persistence
 - Linux / Mac compatibility verification needed
 
-## Next Steps
-1. Fix repository traversal system
-2. Improve XML generation
-3. Enhance error handling
-4. Add comprehensive testing
-5. Test cross platform compatibility
+## Missing Features
+
+### Planned Core Features
+1. **Advanced Repository Analysis**
+   - [ ] Dependency graph generation
+   - [ ] Code complexity metrics
+   - [ ] Custom pattern definition UI
+   - [ ] Batch repository processing
+
+2. **Enhanced Token Analysis**
+   - [ ] Custom model support
+   - [ ] Token cost optimization suggestions
+   - [ ] Batch processing capabilities
+   - [ ] Token usage analytics
+
+3. **UI Improvements**
+   - [ ] Dark mode support
+   - [ ] Customizable themes
+   - [ ] Advanced file filtering
+   - [ ] Search functionality
+   - [ ] Real-time updates
+
+4. **Export Capabilities**
+   - [ ] Multiple export formats (JSON, YAML, XML)
+   - [ ] Custom template support
+   - [ ] Batch export functionality
+   - [ ] Report generation
+
+5. **Integration Features**
+   - [ ] Git integration
+   - [ ] CI/CD pipeline support
+   - [ ] API endpoint
+   - [ ] Plugin system
+
+### Development Roadmap
+1. Repository traversal system enhancement
+2. XML generation improvements
+3. Error handling expansion
+4. Comprehensive testing implementation
+5. Cross-platform compatibility verification
 
 ## License
 [MIT License](LICENSE)
 
 ## Support
 For support, please open an issue in the GitHub repository.
+
+---
+> **Note**: This project is under active development. Features may be added, modified, or removed. Please check the repository regularly for updates.
