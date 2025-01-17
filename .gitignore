@@ -48,3 +48,8 @@ memory.json
 # Logs
 logs/*.log
 changelogrules.md
+
+# Ignore config files with sensitive data
+config/config.yaml
+.env
+*.env
