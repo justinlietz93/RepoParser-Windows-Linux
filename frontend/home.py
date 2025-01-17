@@ -1,96 +1,121 @@
 import streamlit as st
-from core.crawler import RepositoryCrawler
-from core.file_handler import FileHandler
-from app.components.file_tree import render_file_tree
-from app.components.file_viewer import render_file_viewer
-from core.tokenizer import TokenCalculator, get_available_models
+from backend.core.crawler import RepositoryCrawler
+from backend.core.file_handler import FileHandler
+from frontend.components.file_tree import render_file_tree
+from frontend.components.file_viewer import render_file_viewer
+from backend.core.tokenizer import TokenCalculator, get_available_models
 
 def render():
     """Render the home page."""
-    st.title("Repository Crawler 🔍")
+    st.sidebar.title("Repository Crawler 🔍")
     
-    # Repository path input
-    repo_path = st.text_input(
+    # Repository path input in sidebar
+    repo_path = st.sidebar.text_input(
         "Repository Path",
         placeholder="Enter the path to your repository"
     )
     
-    # Add model selection for token calculation
-    model = st.selectbox(
+    # Model selection in sidebar
+    model = st.sidebar.selectbox(
         "Select Model for Token Analysis",
         options=get_available_models(),
         index=2  # Default to gpt-4
     )
-    
-    if st.button("Analyze Repository") and repo_path:
-        with st.spinner("Analyzing repository..."):
-            try:
-                # Initialize components
-                crawler = RepositoryCrawler()
-                file_handler = FileHandler()
-                token_calculator = TokenCalculator()
-                
-                # Crawl repository
-                tree_str, file_paths = crawler.crawl(repo_path)
-                
-                # Create tabs for different views
-                tree_tab, content_tab, tokens_tab = st.tabs([
-                    "File Tree", 
-                    "File Contents",
-                    "Token Analysis"
-                ])
-                
-                with tree_tab:
-                    render_file_tree(tree_str)
-                
-                with content_tab:
-                    selected_file = render_file_viewer(file_paths, file_handler)
-                    
-                    if selected_file:
-                        st.download_button(
-                            "Download Analysis",
-                            selected_file,
-                            file_name="repository_analysis.txt"
-                        )
-                
-                with tokens_tab:
-                    render_token_analysis(tree_str, token_calculator, model)
-                        
-            except Exception as e:
-                st.error(f"Error analyzing repository: {str(e)}")
 
-def render_token_analysis(text: str, calculator: TokenCalculator, model: str):
-    """Render token analysis section."""
-    st.subheader("Token Analysis 🔢")
+    # Create main tabs at the top
+    overview_tab, explorer_tab, chat_tab = st.tabs([
+        "Codebase Overview",
+        "File Explorer",
+        "LLM Chat 💬"
+    ])
     
-    analysis = calculator.analyze_text(text, model)
+    with overview_tab:
+        if repo_path and st.sidebar.button("Analyze Repository"):
+            with st.spinner("Analyzing repository..."):
+                try:
+                    # Initialize components
+                    crawler = RepositoryCrawler()
+                    file_handler = FileHandler()
+                    token_calculator = TokenCalculator()
+                    
+                    # Crawl repository
+                    tree_str, file_paths = crawler.crawl(repo_path)
+                    
+                    st.title("Codebase Parser 📊")
+                    
+                    # Generate Prompt button
+                    st.button("Generate Prompt", key="generate_prompt")
+                    
+                    st.subheader("Token Analysis")
+                    # Token analysis metrics in a row
+                    col1, col2, col3, col4 = st.columns(4)
+                    analysis = token_calculator.analyze_text(tree_str, model)
+                    
+                    with col1:
+                        st.metric("Total Tokens", f"{analysis['token_count']:,}")
+                    with col2:
+                        st.metric("Input Cost", f"${analysis['input_cost']:.2f}")
+                    with col3:
+                        st.metric("Output Cost", f"${analysis['output_cost']:.2f}")
+                    with col4:
+                        st.metric("Total Size", f"{analysis['size_kb']:.1f} KB")
+                    
+                    st.subheader("Codebase Prompt")
+                    st.markdown("Use this prompt to provide codebase context to AI")
+                    
+                    # Repository structure
+                    st.code(tree_str, language="text")
+                        
+                except Exception as e:
+                    st.error(f"Error analyzing repository: {str(e)}")
+        else:
+            st.warning("Please set a repository path in the sidebar first.")
+            
+    with explorer_tab:
+        if repo_path and 'tree_str' in locals():
+            # Split into columns for tree and viewer
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                render_file_tree(tree_str)
+            with col2:
+                if selected_file := render_file_viewer(file_paths, file_handler):
+                    st.download_button(
+                        "Download Analysis",
+                        selected_file,
+                        file_name="repository_analysis.txt"
+                    )
+        else:
+            st.warning("Please analyze a repository first.")
+            
+    with chat_tab:
+        render_chat()
+
+def render_chat():
+    """Render the chat interface."""
+    st.title("Codebase Chat Assistant")
     
-    # Display token counts and costs
-    col1, col2, col3 = st.columns(3)
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
     
-    with col1:
-        st.metric(
-            "Total Tokens",
-            f"{analysis['token_count']:,}",
-            help="Number of tokens in the repository analysis"
-        )
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
     
-    with col2:
-        st.metric(
-            "Input Cost",
-            f"${analysis['input_cost']:.4f}",
-            help="Estimated cost for input tokens"
-        )
-    
-    with col3:
-        st.metric(
-            "Output Cost",
-            f"${analysis['output_cost']:.4f}",
-            help="Estimated cost for output tokens"
-        )
-    
-    # Show sample tokens
-    with st.expander("View Sample Tokens"):
-        st.write("First 10 tokens in the text:")
-        for token in analysis['sample_tokens']:
-            st.code(f"ID: {token['id']} → {token['text']!r}") 
+    # Chat input
+    if prompt := st.chat_input("Ask anything about the repository..."):
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Add assistant response
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            try:
+                # Here you would normally call your LLM API
+                response = f"I understand you're asking about: {prompt}"
+                message_placeholder.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+            except Exception as e:
+                message_placeholder.error(f"Error: {str(e)}") 

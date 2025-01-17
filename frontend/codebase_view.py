@@ -220,55 +220,159 @@ def build_prompt(codebase_dict):
     
     return "\n".join(prompt_parts)
 
+def get_model_token_limit(model="gpt-4"):
+    """Get the token limit for a specific model."""
+    limits = {
+        "gpt-4": 8192,  # 8k context
+        "gpt-4-32k": 32768,  # 32k context
+        "gpt-3.5-turbo": 4096,  # 4k context
+        "gpt-3.5-turbo-16k": 16384  # 16k context
+    }
+    return limits.get(model, 8192)  # Default to gpt-4 limit
+
+def chunk_prompt(prompt: str, model="gpt-4"):
+    """Split prompt into chunks that respect XML structure and token limits."""
+    import re
+    
+    # Get model's token limit and set chunk size to 70%
+    token_limit = get_model_token_limit(model)
+    max_tokens = int(token_limit * 0.7)  # Use 70% of limit to leave more room for response and system message
+    
+    # Split into sections while preserving XML structure
+    sections = re.split(r'(?=# (?:Loaded Rule Files|Repository Structure|Codebase XML)\n)', prompt)
+    
+    chunks = []
+    current_chunk = []
+    current_tokens = 0
+    
+    for section in sections:
+        # If section is XML content, split by file tags
+        if section.startswith('# Codebase XML\n'):
+            xml_parts = re.split(r'(?=\s{2}<file )|(?<=\s{2}</file>)', section)
+            
+            for part in xml_parts:
+                # Skip empty parts
+                if not part.strip():
+                    continue
+                    
+                # Count tokens in this part
+                analyzer = TokenAnalyzer()
+                part_tokens = analyzer.count_tokens(part)
+                
+                # If adding this part would exceed limit, start new chunk
+                if current_tokens + part_tokens > max_tokens and current_chunk:
+                    # Ensure XML is properly closed
+                    if any('<?xml' in x for x in current_chunk) and not any('</repository>' in x for x in current_chunk):
+                        current_chunk.append('  </repository>\n```')
+                    chunks.append('\n'.join(current_chunk))
+                    current_chunk = []
+                    current_tokens = 0
+                    
+                    # If starting new chunk with XML content, add header
+                    if not any('<?xml' in x for x in current_chunk):
+                        current_chunk.extend([
+                            '# Codebase XML (continued)\n',
+                            '```xml',
+                            '<?xml version="1.0" encoding="UTF-8"?>',
+                            '<repository>'
+                        ])
+                
+                current_chunk.append(part)
+                current_tokens += part_tokens
+        else:
+            # For non-XML sections, add whole section if it fits
+            analyzer = TokenAnalyzer()
+            section_tokens = analyzer.count_tokens(section)
+            
+            if current_tokens + section_tokens > max_tokens and current_chunk:
+                chunks.append('\n'.join(current_chunk))
+                current_chunk = []
+                current_tokens = 0
+            
+            current_chunk.append(section)
+            current_tokens += section_tokens
+    
+    # Add any remaining content
+    if current_chunk:
+        if any('<?xml' in x for x in current_chunk) and not any('</repository>' in x for x in current_chunk):
+            current_chunk.append('  </repository>\n```')
+        chunks.append('\n'.join(current_chunk))
+    
+    return chunks
+
 def render_codebase_view():
-    """Render the codebase view page."""
-    st.title("Codebase Parser 📚")
+    """Render the codebase parser view."""
+    st.title("Codebase Parser 📑")
     
     # Get repository path from session state
     repo_path = st.session_state.config.get('local_root', '')
     if not repo_path:
         st.warning("Please set a repository path in the sidebar first.")
         return
+
+    # Initialize session state for storing the prompt if not exists
+    if 'codebase_prompt' not in st.session_state:
+        st.session_state.codebase_prompt = None
+    if 'prompt_chunks' not in st.session_state:
+        st.session_state.prompt_chunks = None
+
+    # Create two columns for the buttons
+    col1, col2 = st.columns([0.85, 0.15])
     
-    if st.button("Generate Prompt"):
-        with st.spinner("Analyzing codebase..."):
-            try:
-                # Build codebase JSON
-                codebase_dict, total_tokens = build_codebase_json(
-                    repo_path,
-                    st.session_state.config
-                )
-                
-                # Get model from config
-                model = st.session_state.config.get('model', 'gpt-4')
-                
-                # Calculate costs
-                input_cost, output_cost = calculate_costs(total_tokens, model)
-                
-                # Display token analysis
-                st.subheader("Token Analysis")
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Total Tokens", f"{total_tokens:,}")
-                with col2:
-                    st.metric("Input Cost", f"${input_cost:.2f}")
-                with col3:
-                    st.metric("Output Cost", f"${output_cost:.2f}")
-                with col4:
-                    total_size = sum(file_info.get('size', 0) for file_info in codebase_dict.values() if isinstance(file_info, dict))
-                    st.metric("Total Size", f"{total_size / 1024:.1f} KB")
-                
-                # Build and display the prompt
-                st.subheader("Codebase Prompt")
-                st.text("Use this prompt to provide codebase context to AI")
-                
-                # Create and display the formatted prompt
-                prompt = build_prompt(codebase_dict)
-                st.code(prompt, language="markdown")
-                
-            except Exception as e:
-                logger.error(f"Error generating codebase overview: {str(e)}")
-                st.error(f"Error generating codebase overview: {str(e)}")
+    # Generate Prompt button in the first (wider) column
+    with col1:
+        if st.button("Generate Prompt", use_container_width=True):
+            with st.spinner("Analyzing codebase..."):
+                try:
+                    # Build codebase JSON
+                    codebase_dict, total_tokens = build_codebase_json(
+                        repo_path,
+                        st.session_state.config
+                    )
+                    
+                    # Get selected model
+                    model = st.session_state.config.get('model', 'gpt-4')
+                    
+                    # Display token analysis
+                    st.subheader("Token Analysis")
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    with col1:
+                        st.metric("Total Tokens", f"{total_tokens:,}")
+                    with col2:
+                        input_cost, output_cost = calculate_costs(total_tokens, model)
+                        st.metric("Input Cost", f"${input_cost:.2f}")
+                    with col3:
+                        st.metric("Output Cost", f"${output_cost:.2f}")
+                    with col4:
+                        total_size = sum(file_info.get('size', 0) for file_info in codebase_dict.values() if isinstance(file_info, dict))
+                        st.metric("Total Size", f"{total_size / 1024:.1f} KB")
+                    with col5:
+                        token_limit = get_model_token_limit(model)
+                        st.metric("Model Limit", f"{token_limit:,}")
+                    
+                    # Build and store the prompt
+                    full_prompt = build_prompt(codebase_dict)
+                    st.session_state.codebase_prompt = full_prompt
+                    
+                    # Chunk the prompt based on model
+                    st.session_state.prompt_chunks = chunk_prompt(full_prompt, model)
+                    
+                    # Display the prompt
+                    st.subheader("Codebase Prompt")
+                    chunk_size = int(get_model_token_limit(model) * 0.8)
+                    st.text(f"Prompt will be sent in {len(st.session_state.prompt_chunks)} chunks (max {chunk_size:,} tokens each)")
+                    st.code(st.session_state.codebase_prompt, language="xml")
+                    
+                except Exception as e:
+                    logger.error(f"Error generating codebase overview: {str(e)}")
+                    st.error(f"Error generating codebase overview: {str(e)}")
+    
+    # Send to Chat button in the second (narrower) column
+    with col2:
+        if st.button("Send to Chat", use_container_width=True, disabled=not st.session_state.codebase_prompt):
+            st.session_state.pending_prompt_chunks = st.session_state.prompt_chunks
+            st.session_state.active_tab = "LLM Chat"
+            st.rerun()
 
 if __name__ == "__main__":
     render_codebase_view() 

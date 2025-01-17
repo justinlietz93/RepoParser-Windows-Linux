@@ -30,6 +30,13 @@ logger.info("Starting Repository Crawler")
 import streamlit as st
 import yaml
 
+# Import our packages
+from frontend.components.sidebar import SidebarComponent
+from frontend.components.file_tree import FileTreeComponent
+from frontend.components.file_viewer import FileViewer
+from backend.core.crawler import RepositoryCrawler
+from backend.core.tokenizer import TokenCalculator, get_available_models
+
 # Preserve custom user rules if set
 if 'loaded_rules' not in st.session_state:
     st.session_state.loaded_rules = {}
