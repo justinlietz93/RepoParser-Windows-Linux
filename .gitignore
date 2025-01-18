@@ -39,17 +39,96 @@ env/
 .DS_Store
 Thumbs.db
 
-# Memory
+# Binary files
+*.bin
+*.exe
+*.dll
+*.dylib
+*.out
+*.o
+*.a
+*.lib
+*.pyd
+*.pkl
+*.pyc
+*.pyo
+*.pdb
+
+# Memory and Cognitive System
 memory.json
+cognitive_memory/
+*.chroma/
+chromadb/
+vector_store/
+embeddings/
 
 # Cursor
 .cursorrules
+.cursor/
+.cursor.json
 
 # Logs
 logs/*.log
 changelogrules.md
+*.log
+log/
 
-# Ignore config files with sensitive data
+# Configuration and Secrets
 config/config.yaml
 .env
 *.env
+api_keys.json
+*_api_key*
+secrets/
+credentials/
+auth/
+
+# Temporary and Cache files
+*.tmp
+*.temp
+.cache/
+__temp__/
+temp/
+tmp/
+
+# Session and State files
+.session/
+session_state/
+*.session
+*.state
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Testing and Coverage
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+.tox/
+nosetests.xml
+coverage.xml
+
+# Documentation builds
+docs/_build/
+site/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Local development
+local_settings.py
+instance/
+.instance/
+
+# Backup files
+*.bak
+*~
+*.swp
+*.swo
+*.swn
+backup/
+*.backup

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import os
+from backend.core.crawler import RepositoryCrawler
 
 logger = logging.getLogger(__name__)
 
@@ -91,15 +92,24 @@ class SidebarComponent:
     LLM_PROVIDERS = {
         "OpenAI": {
             "models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"],
-            "key_name": "OPENAI_API_KEY"
+            "key_name": "OPENAI_API_KEY",
+            "supports_multiple_keys": True  # Flag to indicate multiple keys support
         },
         "Anthropic": {
             "models": ["claude-2.1", "claude-instant"],
-            "key_name": "ANTHROPIC_API_KEY"
+            "key_name": "ANTHROPIC_API_KEY",
+            "supports_multiple_keys": True
         },
         "DeepSeek": {
-            "models": ["deepseek-chat", "deepseek-coder"],
-            "key_name": "DEEPSEEK_API_KEY"
+            "models": ["deepseek-chat"],
+            "key_name": "DEEPSEEK_API_KEY",
+            "supports_multiple_keys": True
+        },
+        "Gemini": {
+            "models": ["gemini-1.5-pro-latest"],
+            "key_name": "GEMINI_API_KEY",
+            "is_coordinator": True,  # Flag to indicate this is used for coordination
+            "supports_multiple_keys": True
         }
     }
 
@@ -222,25 +232,49 @@ class SidebarComponent:
                 )
                 
                 key_name = self.LLM_PROVIDERS[provider]["key_name"]
-                current_key = st.session_state.config.get('api_keys', {}).get(key_name, '')
+                supports_multiple = self.LLM_PROVIDERS[provider].get("supports_multiple_keys", False)
                 
-                api_key = st.text_input(
+                # Get existing keys for this provider
+                existing_keys = st.session_state.config.get('api_keys', {}).get(key_name, [])
+                if not isinstance(existing_keys, list):
+                    existing_keys = [existing_keys] if existing_keys else []
+                
+                # Show existing keys
+                if existing_keys:
+                    st.markdown("#### Configured API Keys")
+                    for i, key in enumerate(existing_keys):
+                        masked_key = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "****"
+                        col1, col2 = st.columns([0.8, 0.2])
+                        with col1:
+                            st.text(f"Key {i+1}: {masked_key}")
+                        with col2:
+                            if st.button("❌", key=f"remove_key_{i}", help=f"Remove key {i+1}"):
+                                existing_keys.pop(i)
+                                if not existing_keys:  # If last key removed
+                                    st.session_state.config['api_keys'][key_name] = []
+                                else:
+                                    st.session_state.config['api_keys'][key_name] = existing_keys
+                                self.save_config(st.session_state.config)
+                                st.rerun()
+                
+                # Add new key section
+                st.markdown("#### Add New API Key")
+                new_api_key = st.text_input(
                     f"Enter {key_name}",
-                    value=current_key,
                     type="password",
-                    key=f"api_key_{provider}"
+                    key=f"new_api_key_{provider}"
                 )
                 
-                if api_key:
+                if new_api_key:
                     try:
                         # Validate API key before saving
                         if provider == "OpenAI":
-                            if not api_key.startswith("sk-"):
+                            if not new_api_key.startswith("sk-"):
                                 st.error("Invalid OpenAI API key format. Should start with 'sk-'")
                                 return repo_path
                             # Test the API key
                             from openai import OpenAI
-                            client = OpenAI(api_key=api_key)
+                            client = OpenAI(api_key=new_api_key)
                             try:
                                 # Make a minimal API call to validate the key
                                 client.models.list()
@@ -248,18 +282,44 @@ class SidebarComponent:
                             except Exception as e:
                                 st.error(f"Invalid OpenAI API key: {str(e)}")
                                 return repo_path
-                        elif provider == "Anthropic" and not api_key.startswith("sk-ant-"):
+                        elif provider == "Anthropic" and not new_api_key.startswith("sk-ant-"):
                             st.error("Invalid Anthropic API key format. Should start with 'sk-ant-'")
                             return repo_path
+                        elif provider == "DeepSeek":
+                            # Test the DeepSeek API key
+                            try:
+                                from openai import OpenAI
+                                client = OpenAI(api_key=new_api_key, base_url="https://api.deepseek.com/v1")
+                                # Make a minimal API call to validate the key
+                                response = client.models.list()
+                                valid_key = True
+                            except Exception as e:
+                                st.error(f"Invalid DeepSeek API key: {str(e)}")
+                                return repo_path
                         
                         # Only save if validation passed
                         if 'api_keys' not in st.session_state.config:
                             st.session_state.config['api_keys'] = {}
-                        st.session_state.config['api_keys'][key_name] = api_key
-                        st.session_state.config['llm_provider'] = provider
-                        st.session_state.config['model'] = model
-                        self.save_config(st.session_state.config)
-                        st.success(f"{provider} API key saved successfully!")
+                        
+                        # Initialize as list if not already
+                        if key_name not in st.session_state.config['api_keys']:
+                            st.session_state.config['api_keys'][key_name] = []
+                        elif not isinstance(st.session_state.config['api_keys'][key_name], list):
+                            # Convert single key to list
+                            old_key = st.session_state.config['api_keys'][key_name]
+                            st.session_state.config['api_keys'][key_name] = [old_key] if old_key else []
+                        
+                        # Add new key if not already present
+                        if new_api_key not in st.session_state.config['api_keys'][key_name]:
+                            st.session_state.config['api_keys'][key_name].append(new_api_key)
+                            st.session_state.config['llm_provider'] = provider
+                            st.session_state.config['model'] = model
+                            self.save_config(st.session_state.config)
+                            st.success(f"{provider} API key added successfully!")
+                            st.rerun()
+                        else:
+                            st.warning("This API key is already configured.")
+                            
                     except Exception as e:
                         st.error(f"Error saving API key: {str(e)}")
                         logger.error(f"API key save error: {str(e)}", exc_info=True)
@@ -380,21 +440,37 @@ class SidebarComponent:
                     # Validate path before using
                     validated_path = self.validate_repo_path(repo_path)
                     if validated_path and validated_path.exists():
-                        from frontend.components.ignore_tree import IgnoreTreeComponent
-                        config_hash = str(hash(str(st.session_state.config)))
-                        if ('crawler' not in st.session_state or
-                            'config_hash' not in st.session_state or
-                            st.session_state.config_hash != config_hash):
-                            from backend.core.crawler import RepositoryCrawler
-                            logger.info("Initializing new crawler")
-                            st.session_state.crawler = RepositoryCrawler(str(validated_path), st.session_state.config)
-                            st.session_state.config_hash = config_hash
-
-                        file_tree = st.session_state.crawler.get_file_tree()
-                        ignore_tree = IgnoreTreeComponent(file_tree)
-                        ignore_tree.render()
+                        try:
+                            # Initialize crawler with current config
+                            crawler = RepositoryCrawler(str(validated_path), st.session_state.config)
+                            file_tree = crawler.get_file_tree()
+                            
+                            # Get current ignore patterns
+                            ignored_dirs = set(st.session_state.config.get('ignore_patterns', {}).get('directories', []))
+                            ignored_files = set(st.session_state.config.get('ignore_patterns', {}).get('files', []))
+                            
+                            # Use the VS Code-style tree view
+                            from frontend.components.tree_view import TreeView
+                            tree_view = TreeView()
+                            new_ignored_dirs, new_ignored_files = tree_view.render(
+                                file_tree['contents'],
+                                ignored_dirs=ignored_dirs,
+                                ignored_files=ignored_files
+                            )
+                            
+                            # Update config if patterns changed
+                            if new_ignored_dirs != ignored_dirs or new_ignored_files != ignored_files:
+                                st.session_state.config['ignore_patterns']['directories'] = list(new_ignored_dirs)
+                                st.session_state.config['ignore_patterns']['files'] = list(new_ignored_files)
+                                self.save_config(st.session_state.config)
+                                if 'current_tree' in st.session_state:
+                                    del st.session_state.current_tree
+                                st.rerun()
+                                
+                        except Exception as e:
+                            st.error(f"Error loading file tree: {str(e)}")
                     else:
-                        st.info("Please enter a valid repository path in the Settings tab to manage ignore patterns.")
+                        st.info("Please enter a valid repository path in the Settings tab to manage file inclusion.")
 
             return st.session_state.config.get('local_root', '')
 

@@ -10,44 +10,92 @@ class TokenCalculator:
         'gpt-4': {'input': 0.03, 'output': 0.06},
         'gpt-4-32k': {'input': 0.06, 'output': 0.12},
         'gpt-3.5-turbo': {'input': 0.0010, 'output': 0.0020},
-        'gpt-3.5-turbo-16k': {'input': 0.0030, 'output': 0.0040}
+        'gpt-3.5-turbo-16k': {'input': 0.0030, 'output': 0.0040},
+        'deepseek-chat': {'input': 0.002, 'output': 0.002},  # DeepSeek pricing
+        'gemini-1.5-pro-latest': {
+            'standard': {'input': 0.00125, 'output': 0.005, 'context': 0.0003125},  # Up to 128k tokens
+            'long': {'input': 0.0025, 'output': 0.01, 'context': 0.000625}  # Beyond 128k tokens
+        }
     }
 
     def __init__(self):
         """Initialize the token calculator."""
         self.logger = logging.getLogger(__name__)
+        try:
+            import tiktoken
+            self.tiktoken = tiktoken
+        except ImportError:
+            self.logger.warning("tiktoken not available, falling back to approximate counting")
+            self.tiktoken = None
 
-    def count_tokens(
-        self, 
-        text: str, 
-        model: str = "gpt-4"
-    ) -> Tuple[int, List[int]]:
+    def count_tokens(self, text: str, model: str = None) -> tuple[int, str]:
         """
         Count tokens in text for a specific model.
-        
-        Args:
-            text: Text to analyze
-            model: Model name to use for tokenization
-            
-        Returns:
-            Tuple of (token count, list of token IDs)
+        Returns (token_count, method_used)
         """
-        try:
-            encoding = tiktoken.encoding_for_model(model)
-        except KeyError:
-            self.logger.warning(
-                f"Model {model} not found, falling back to cl100k_base"
-            )
-            encoding = tiktoken.get_encoding("cl100k_base")
+        if not text:
+            return 0, "empty"
 
-        token_ids = encoding.encode(text)
-        return len(token_ids), token_ids
+        try:
+            # For Gemini models, use their token counter
+            if model and model.startswith('gemini'):
+                try:
+                    import google.generativeai as genai
+                    count = genai.count_tokens(text)
+                    return count, "gemini_counter"
+                except Exception as e:
+                    self.logger.warning(f"Error using Gemini token counter: {e}")
+                    return self._approximate_token_count(text), "approximate"
+
+            # Special handling for DeepSeek models
+            if model == "deepseek-chat":
+                # Use DeepSeek's approximate token ratios
+                english_chars = sum(1 for c in text if ord(c) < 128)  # ASCII characters
+                chinese_chars = sum(1 for c in text if ord(c) >= 128)  # Non-ASCII (approximate for Chinese)
+                
+                # Apply DeepSeek's conversion ratios
+                token_count = int((english_chars * 0.3) + (chinese_chars * 0.6))
+                return token_count, "deepseek_estimate"
+
+            # For OpenAI/compatible models, use tiktoken
+            if self.tiktoken and model:
+                try:
+                    encoding = self.tiktoken.encoding_for_model(model)
+                    tokens = encoding.encode(text)
+                    return len(tokens), "tiktoken"
+                except Exception as e:
+                    self.logger.warning(f"Error using tiktoken for {model}: {e}")
+
+            # Fallback to approximate counting
+            return self._approximate_token_count(text), "approximate"
+
+        except Exception as e:
+            self.logger.error(f"Error counting tokens: {e}")
+            return self._approximate_token_count(text), "approximate"
+
+    def _approximate_token_count(self, text: str) -> int:
+        """Approximate token count based on word count."""
+        # Average ratio of tokens to words is about 1.3
+        words = len(text.split())
+        return int(words * 1.3)
+
+    def estimate_cost(self, input_tokens: int, output_tokens: int, model: str) -> float:
+        """Estimate cost for given token counts and model."""
+        try:
+            costs = self.MODEL_COSTS.get(model, {'input': 0.002, 'output': 0.002})
+            input_cost = (input_tokens / 1000) * costs['input']
+            output_cost = (output_tokens / 1000) * costs['output']
+            return input_cost + output_cost
+        except Exception as e:
+            self.logger.error(f"Error estimating cost: {e}")
+            return 0.0
 
     def calculate_cost(
         self, 
         token_count: int, 
         model: str = "gpt-4", 
-        is_output: bool = False
+        is_output: bool = False,
+        is_context: bool = False
     ) -> float:
         """
         Calculate cost for token count.
@@ -56,6 +104,7 @@ class TokenCalculator:
             token_count: Number of tokens
             model: Model name
             is_output: Whether these are output tokens
+            is_context: Whether these are context tokens (for Gemini)
             
         Returns:
             Estimated cost in USD
@@ -66,8 +115,15 @@ class TokenCalculator:
             )
             model = "gpt-3.5-turbo"
 
-        cost_type = 'output' if is_output else 'input'
-        cost_per_1k = self.MODEL_COSTS[model][cost_type]
+        # Special handling for Gemini's tiered pricing
+        if model == 'gemini-1.5-pro-latest':
+            tier = 'long' if token_count > 128000 else 'standard'
+            cost_type = 'context' if is_context else ('output' if is_output else 'input')
+            cost_per_1k = self.MODEL_COSTS[model][tier][cost_type]
+        else:
+            cost_type = 'output' if is_output else 'input'
+            cost_per_1k = self.MODEL_COSTS[model][cost_type]
+
         return (token_count / 1000) * cost_per_1k
 
     def analyze_text(
