@@ -1,0 +1,148 @@
+# Prompts output directory
+prompts/*_prompt.txt
+files_list.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local paths and repository config
+**/local_root*
+**/repo_path*
+**/repository_config*
+*.path
+path_config/
+local_paths.json
+repo_config.json
+user_paths.json
+workspace_config/
+.workspace
+.repository
+
+# Binary files
+*.bin
+*.exe
+*.dll
+*.dylib
+*.out
+*.o
+*.a
+*.lib
+*.pyd
+*.pkl
+*.pyc
+*.pyo
+*.pdb
+
+# Memory and Cognitive System
+memory.json
+cognitive_memory/
+*.chroma/
+chromadb/
+vector_store/
+embeddings/
+
+# Cursor
+.cursorrules
+.cursor/
+.cursor.json
+
+# Logs
+logs/*.log
+changelogrules.md
+*.log
+log/
+
+# Configuration and Secrets
+config/config.yaml
+.env
+*.env
+api_keys.json
+*_api_key*
+secrets/
+credentials/
+auth/
+
+# Temporary and Cache files
+*.tmp
+*.temp
+.cache/
+__temp__/
+temp/
+tmp/
+
+# Session and State files
+.session/
+session_state/
+*.session
+*.state
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Testing and Coverage
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+.tox/
+nosetests.xml
+coverage.xml
+
+# Documentation builds
+docs/_build/
+site/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Local development
+local_settings.py
+instance/
+.instance/
+
+# Backup files
+*.bak
+*~
+*.swp
+*.swo
+*.swn
+backup/
+*.backup

@@ -1,0 +1,45 @@
+# Core dependencies
+streamlit>=1.24.0
+pyyaml>=6.0.0
+tiktoken>=0.5.1
+pathlib>=1.0.1
+
+# LLM API dependencies
+openai>=1.0.0
+anthropic>=0.3.0
+python-dotenv>=0.19.0
+
+# Development dependencies
+pytest>=7.0.0
+black>=22.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+
+# Type checking
+types-PyYAML>=6.0.12
+types-setuptools>=67.1.0
+
+# Optional dependencies for better performance
+watchdog>=2.1.9  # Recommended by Streamlit for better performance 
+
+# Additional dependencies
+chromadb>=0.4.0
+numpy>=1.22.5
+aiohttp>=3.8.0
+tqdm>=4.65.0
+tenacity>=8.2.3
+httpx>=0.27.0
+rich>=10.11.0
+typing_extensions>=4.5.0
+fastapi>=0.95.2
+uvicorn[standard]>=0.18.3
+onnxruntime>=1.14.1
+tokenizers>=0.13.2
+importlib-resources>=5.0.0
+grpcio>=1.58.0
+bcrypt>=4.0.1
+typer>=0.9.0
+kubernetes>=28.1.0
+mmh3>=4.0.1
+orjson>=3.9.12
+google-generativeai>=0.3.2 
