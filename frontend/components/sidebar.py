@@ -202,7 +202,6 @@ class SidebarComponent:
     def initialize_crawler(self, path: Path) -> Optional[RepositoryCrawler]:
         """Initialize repository crawler with size warning."""
         cache_key = f"crawler_{str(path)}"
-        warning_key = f"size_warning_{str(path)}"
         
         # Check if we have a cached crawler
         if cache_key in st.session_state:
@@ -217,15 +216,19 @@ class SidebarComponent:
                     size_check_limit = 10000  # Check first 10k files
                     
                     for i, f in enumerate(path.rglob('*')):
-                        if i > size_check_limit:
-                            st.session_state[warning_key] = True
+                        if i > size_check_limit or (f.is_file() and size > 1_000_000_000):  # 1GB
+                            warning_container = st.empty()
+                            with warning_container:
+                                warning_cols = st.columns([15, 1])
+                                with warning_cols[0]:
+                                    st.warning("⚠️ Large repository detected - performance optimizations enabled")
+                                with warning_cols[1]:
+                                    if st.button("✕", key=f"dismiss_warning_{str(path)}", help="Dismiss warning"):
+                                        warning_container.empty()
                             break
                         if f.is_file():
                             size += f.stat().st_size
                             file_count += 1
-                            if size > 1_000_000_000:  # 1GB
-                                st.session_state[warning_key] = True
-                                break
             except Exception as e:
                 logger.warning(f"Size check failed: {str(e)}")
             
@@ -338,9 +341,14 @@ class SidebarComponent:
                     )
                     if dirs_text != "\n".join(dirs):
                         new_dirs = [d.strip() for d in dirs_text.split("\n") if d.strip()]
-                        st.session_state.config['ignore_patterns']['directories'] = new_dirs
-                        current_config = st.session_state.config.copy()
-                        self.save_config(current_config)
+                        st.session_state.config['ignore_patterns'] = {
+                            'directories': new_dirs,
+                            'files': st.session_state.config.get('ignore_patterns', {}).get('files', [])
+                        }
+                        self.save_config(st.session_state.config)
+                        # Clear crawler cache to force refresh
+                        if 'crawler' in st.session_state:
+                            del st.session_state.crawler
                         if 'current_tree' in st.session_state:
                             del st.session_state.current_tree
                         st.rerun()
@@ -356,9 +364,14 @@ class SidebarComponent:
                     )
                     if files_text != "\n".join(files):
                         new_files = [f.strip() for f in files_text.split("\n") if f.strip()]
-                        st.session_state.config['ignore_patterns']['files'] = new_files
-                        current_config = st.session_state.config.copy()
-                        self.save_config(current_config)
+                        st.session_state.config['ignore_patterns'] = {
+                            'directories': st.session_state.config.get('ignore_patterns', {}).get('directories', []),
+                            'files': new_files
+                        }
+                        self.save_config(st.session_state.config)
+                        # Clear crawler cache to force refresh
+                        if 'crawler' in st.session_state:
+                            del st.session_state.crawler
                         if 'current_tree' in st.session_state:
                             del st.session_state.current_tree
                         st.rerun()
@@ -412,11 +425,18 @@ class SidebarComponent:
                 )
                 
                 available_models = self.LLM_PROVIDERS[provider]["models"]
-                model = st.selectbox(
+                selected_model = st.selectbox(
                     "Select Model",
                     options=available_models,
-                    key="llm_model"
+                    key="llm_model",
+                    index=available_models.index(st.session_state.config.get('model', available_models[0]))
                 )
+                
+                # Update config with selected model
+                if selected_model != st.session_state.config.get('model'):
+                    st.session_state.config['model'] = selected_model
+                    self.save_config(st.session_state.config)
+                    st.rerun()
                 
                 key_name = self.LLM_PROVIDERS[provider]["key_name"]
                 supports_multiple = self.LLM_PROVIDERS[provider].get("supports_multiple_keys", False)
@@ -500,7 +520,7 @@ class SidebarComponent:
                         if new_api_key not in st.session_state.config['api_keys'][key_name]:
                             st.session_state.config['api_keys'][key_name].append(new_api_key)
                             st.session_state.config['llm_provider'] = provider
-                            st.session_state.config['model'] = model
+                            st.session_state.config['model'] = selected_model
                             self.save_config(st.session_state.config)
                             st.success(f"{provider} API key added successfully!")
                             st.rerun()
@@ -523,17 +543,6 @@ class SidebarComponent:
                 if not validated_path:
                     return repo_path
                     
-                # Show size warning if needed
-                warning_key = f"size_warning_{str(validated_path)}"
-                if warning_key in st.session_state and st.session_state[warning_key]:
-                    col1, col2 = st.columns([15, 1])
-                    with col1:
-                        st.warning("⚠️ Large repository detected - performance optimizations enabled")
-                    with col2:
-                        if st.button("✕", key="dismiss_warning", help="Dismiss warning"):
-                            st.session_state[warning_key] = False
-                            st.rerun()
-                    
                 try:
                     # Initialize crawler
                     crawler = self.initialize_crawler(validated_path)
@@ -543,34 +552,21 @@ class SidebarComponent:
                         
                     # Get file tree
                     def get_tree(p: Path):
-                        return crawler.get_file_tree()  # Removed max_depth parameter
+                        return crawler.get_file_tree()
                         
                     file_tree = self.safe_path_operation(validated_path, get_tree)
                     if not file_tree:
                         st.error("Failed to get file tree")
                         return repo_path
                     
-                    # Get current ignore patterns
-                    ignored_dirs = set(st.session_state.config.get('ignore_patterns', {}).get('directories', []))
-                    ignored_files = set(st.session_state.config.get('ignore_patterns', {}).get('files', []))
-                    
                     # Use the VS Code-style tree view
                     from frontend.components.tree_view import TreeView
                     tree_view = TreeView()
-                    new_ignored_dirs, new_ignored_files = tree_view.render(
+                    tree_view.render(
                         file_tree['contents'],
-                        ignored_dirs=ignored_dirs,
-                        ignored_files=ignored_files
+                        ignored_dirs=set(st.session_state.config.get('ignore_patterns', {}).get('directories', [])),
+                        ignored_files=set(st.session_state.config.get('ignore_patterns', {}).get('files', []))
                     )
-                    
-                    # Update config if patterns changed
-                    if new_ignored_dirs != ignored_dirs or new_ignored_files != ignored_files:
-                        st.session_state.config['ignore_patterns']['directories'] = list(new_ignored_dirs)
-                        st.session_state.config['ignore_patterns']['files'] = list(new_ignored_files)
-                        self.save_config(st.session_state.config)
-                        if 'current_tree' in st.session_state:
-                            del st.session_state.current_tree
-                        st.rerun()
                     
                 except Exception as e:
                     st.error(f"Error loading file tree: {str(e)}")

@@ -9,6 +9,7 @@ class TokenCalculator:
     MODEL_COSTS = {
         'gpt-4': {'input': 0.03, 'output': 0.06},
         'gpt-4-32k': {'input': 0.06, 'output': 0.12},
+        'gpt-4-turbo': {'input': 0.01, 'output': 0.02},
         'gpt-3.5-turbo': {'input': 0.0010, 'output': 0.0020},
         'gpt-3.5-turbo-16k': {'input': 0.0030, 'output': 0.0040},
         'deepseek-chat': {'input': 0.002, 'output': 0.002},  # DeepSeek pricing
@@ -16,6 +17,19 @@ class TokenCalculator:
             'standard': {'input': 0.00125, 'output': 0.005, 'context': 0.0003125},  # Up to 128k tokens
             'long': {'input': 0.0025, 'output': 0.01, 'context': 0.000625}  # Beyond 128k tokens
         }
+    }
+
+    # Model context limits
+    MODEL_LIMITS = {
+        "gpt-4": 8192,
+        "gpt-4-32k": 32768,
+        "gpt-4-turbo": 128000,
+        "gpt-3.5-turbo": 16384,
+        "gpt-3.5-turbo-16k": 16384,
+        "claude-2.1": 200000,
+        "claude-instant": 100000,
+        "deepseek-chat": 32768,
+        "gemini-1.5-pro-latest": 1000000
     }
 
     def __init__(self):
@@ -27,6 +41,23 @@ class TokenCalculator:
         except ImportError:
             self.logger.warning("tiktoken not available, falling back to approximate counting")
             self.tiktoken = None
+
+    @classmethod
+    def get_model_limit(cls, model: str) -> int:
+        """Get the context limit for a specific model.
+        
+        Args:
+            model: The model name
+            
+        Returns:
+            int: The model's context limit in tokens
+        """
+        return cls.MODEL_LIMITS.get(model, 8192)  # Default to gpt-4 limit if model not found
+
+    @classmethod
+    def get_available_models(cls) -> List[str]:
+        """Get list of all available models with defined limits."""
+        return list(cls.MODEL_LIMITS.keys())
 
     def count_tokens(self, text: str, model: str = None) -> tuple[int, str]:
         """

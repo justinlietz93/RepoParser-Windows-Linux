@@ -9,16 +9,12 @@ logger = logging.getLogger(__name__)
 
 def calculate_costs(total_tokens, model="gpt-4"):
     """Calculate estimated costs based on token count and model."""
-    rates = {
-        "gpt-4": {"input": 0.03, "output": 0.06},
-        "gpt-4-32k": {"input": 0.06, "output": 0.12},
-        "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002},
-        "gpt-3.5-turbo-16k": {"input": 0.0030, "output": 0.0040}
-    }
+    from backend.core.tokenizer import TokenCalculator
+    calculator = TokenCalculator()
     
-    rate = rates.get(model, rates["gpt-4"])
-    input_cost = (total_tokens / 1000) * rate["input"]
-    output_cost = (total_tokens / 1000) * rate["output"]
+    # Calculate input and output costs using the calculator
+    input_cost = calculator.calculate_cost(total_tokens, model, is_output=False)
+    output_cost = calculator.calculate_cost(total_tokens, model, is_output=True)
     
     return input_cost, output_cost
 
@@ -45,8 +41,15 @@ def get_file_contents(file_path):
 def build_codebase_json(repo_path, config):
     """Build JSON representation of the codebase."""
     try:
+        from backend.core.crawler import RepositoryCrawler
         crawler = RepositoryCrawler(repo_path, config)
-        analyzer = TokenAnalyzer(model=config.get('model', 'gpt-4'))
+        
+        provider = config.get('llm_provider', 'OpenAI')
+        model = config.get('model', 'gpt-4')
+        
+        # Initialize token calculator
+        from backend.core.tokenizer import TokenCalculator
+        calculator = TokenCalculator()
         
         # Get the file tree first
         file_tree = crawler.get_file_tree()
@@ -81,11 +84,12 @@ def build_codebase_json(repo_path, config):
                             "size": full_path.stat().st_size
                         }
                         nonlocal total_tokens
-                        total_tokens += analyzer.count_tokens(file_content)
+                        token_count, _ = calculator.count_tokens(file_content, model)
+                        total_tokens += token_count
                     except Exception as e:
                         logger.error(f"Error processing {path}: {str(e)}")
                         continue
-                else:  # It's a directory
+                elif isinstance(content, dict):
                     process_tree(content, path)
         
         # Start processing from the root
@@ -98,8 +102,8 @@ def build_codebase_json(repo_path, config):
         return codebase_dict, total_tokens
             
     except Exception as e:
-        logger.error(f"Error initializing repository crawler: {str(e)}")
-        raise Exception(f"Error accessing repository: {str(e)}")
+        logger.error(f"Error building codebase JSON: {str(e)}")
+        return {}, 0
 
 def build_directory_tree(codebase_dict):
     """Build a formatted directory tree structure."""
@@ -222,21 +226,17 @@ def build_prompt(codebase_dict):
 
 def get_model_token_limit(model="gpt-4"):
     """Get the token limit for a specific model."""
-    limits = {
-        "gpt-4": 8192,  # 8k context
-        "gpt-4-32k": 32768,  # 32k context
-        "gpt-3.5-turbo": 4096,  # 4k context
-        "gpt-3.5-turbo-16k": 16384  # 16k context
-    }
-    return limits.get(model, 8192)  # Default to gpt-4 limit
+    from backend.core.tokenizer import TokenCalculator
+    return TokenCalculator.get_model_limit(model)
 
 def chunk_prompt(prompt: str, model="gpt-4"):
     """Split prompt into chunks that respect XML structure and token limits."""
     import re
+    from backend.core.tokenizer import TokenCalculator
     
     # Get model's token limit and set chunk size to 70%
-    token_limit = get_model_token_limit(model)
-    max_tokens = int(token_limit * 0.7)  # Use 70% of limit to leave more room for response and system message
+    token_limit = TokenCalculator.get_model_limit(model)
+    max_tokens = int(token_limit * 0.7)  # Use 70% of limit to leave room for response
     
     # Split into sections while preserving XML structure
     sections = re.split(r'(?=# (?:Loaded Rule Files|Repository Structure|Codebase XML)\n)', prompt)
@@ -244,6 +244,9 @@ def chunk_prompt(prompt: str, model="gpt-4"):
     chunks = []
     current_chunk = []
     current_tokens = 0
+    
+    # Initialize token calculator
+    calculator = TokenCalculator()
     
     for section in sections:
         # If section is XML content, split by file tags
@@ -255,9 +258,8 @@ def chunk_prompt(prompt: str, model="gpt-4"):
                 if not part.strip():
                     continue
                     
-                # Count tokens in this part
-                analyzer = TokenAnalyzer()
-                part_tokens = analyzer.count_tokens(part)
+                # Count tokens in this part using the calculator
+                part_tokens, _ = calculator.count_tokens(part, model)
                 
                 # If adding this part would exceed limit, start new chunk
                 if current_tokens + part_tokens > max_tokens and current_chunk:
@@ -281,8 +283,7 @@ def chunk_prompt(prompt: str, model="gpt-4"):
                 current_tokens += part_tokens
         else:
             # For non-XML sections, add whole section if it fits
-            analyzer = TokenAnalyzer()
-            section_tokens = analyzer.count_tokens(section)
+            section_tokens, _ = calculator.count_tokens(section, model)
             
             if current_tokens + section_tokens > max_tokens and current_chunk:
                 chunks.append('\n'.join(current_chunk))
@@ -301,7 +302,7 @@ def chunk_prompt(prompt: str, model="gpt-4"):
     return chunks
 
 def render_codebase_view():
-    """Render the codebase parser view."""
+    """Render the codebase overview."""
     st.title("Codebase Parser 📑")
     
     # Get repository path from session state
@@ -324,14 +325,14 @@ def render_codebase_view():
         if st.button("Generate Prompt", use_container_width=True):
             with st.spinner("Analyzing codebase..."):
                 try:
+                    # Get selected model from config
+                    model = st.session_state.config.get('model', 'gpt-4')
+                    
                     # Build codebase JSON
                     codebase_dict, total_tokens = build_codebase_json(
                         repo_path,
                         st.session_state.config
                     )
-                    
-                    # Get selected model
-                    model = st.session_state.config.get('model', 'gpt-4')
                     
                     # Display token analysis
                     st.subheader("Token Analysis")
@@ -347,7 +348,8 @@ def render_codebase_view():
                         total_size = sum(file_info.get('size', 0) for file_info in codebase_dict.values() if isinstance(file_info, dict))
                         st.metric("Total Size", f"{total_size / 1024:.1f} KB")
                     with col5:
-                        token_limit = get_model_token_limit(model)
+                        from backend.core.tokenizer import TokenCalculator
+                        token_limit = TokenCalculator.get_model_limit(model)
                         st.metric("Model Limit", f"{token_limit:,}")
                     
                     # Build and store the prompt
@@ -359,7 +361,7 @@ def render_codebase_view():
                     
                     # Display the prompt
                     st.subheader("Codebase Prompt")
-                    chunk_size = int(get_model_token_limit(model) * 0.8)
+                    chunk_size = int(TokenCalculator.get_model_limit(model) * 0.8)
                     st.text(f"Prompt will be sent in {len(st.session_state.prompt_chunks)} chunks (max {chunk_size:,} tokens each)")
                     st.code(st.session_state.codebase_prompt, language="xml")
                     
