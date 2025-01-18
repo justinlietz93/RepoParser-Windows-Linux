@@ -80,6 +80,11 @@
          <Phase>Based on task directive</Phase>
       </ProjectScope>
       <Standards>
+         <Quality>Attention to detail</Quality>
+         <Process>Constant review of your work</Process>
+         <Dependency>Before adding or changing code, always check if it's already implemented and if there are any dependencies</Dependency>
+      </Standards>
+      <Standards>
          <Engineering>Best practices</Engineering>
          <Process>Agile methodology</Process>
          <Quality>Continuous improvement</Quality>

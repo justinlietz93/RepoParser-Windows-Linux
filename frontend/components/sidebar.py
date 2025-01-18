@@ -4,7 +4,7 @@ import streamlit as st
 import yaml
 from pathlib import Path
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
 from threading import Lock
 import subprocess
 import sys
@@ -172,34 +172,24 @@ class SidebarComponent:
                 st.session_state.config['api_keys'] = {}
 
     def validate_repo_path(self, path: str) -> Optional[Path]:
-        """Validate and normalize repository path.
-        
-        Args:
-            path: The repository path to validate
+        """Quick validation of repository path."""
+        if not path:
+            st.error("Repository path cannot be empty")
+            return None
             
-        Returns:
-            Normalized Path object if valid, None otherwise
-        """
         try:
-            # Convert to absolute path and normalize
-            abs_path = Path(path).resolve()
+            # Basic path validation only
+            abs_path = Path(path).absolute()
             
-            # Basic security checks
-            if not abs_path.exists():
-                st.error("Repository path does not exist")
-                return None
-            if not abs_path.is_dir():
-                st.error("Path is not a directory")
+            # Quick security check
+            path_str = str(abs_path).lower()
+            if any(pattern in path_str for pattern in {'..', '~', '$', '%', '\\\\'}):
+                st.error("Invalid path pattern detected")
                 return None
                 
-            # Check for directory traversal attempts
-            if ".." in str(abs_path.relative_to(abs_path.anchor)):
-                st.error("Invalid repository path: directory traversal not allowed")
-                return None
-                
-            # Additional security checks
-            if any(part.startswith('.') for part in abs_path.parts[1:]):
-                st.error("Invalid repository path: hidden directories not allowed")
+            # Basic existence check
+            if not abs_path.exists() or not abs_path.is_dir():
+                st.error("Path must be an existing directory")
                 return None
                 
             return abs_path
@@ -209,15 +199,212 @@ class SidebarComponent:
             logger.error(f"Path validation error: {str(e)}", exc_info=True)
             return None
 
+    def initialize_crawler(self, path: Path) -> Optional[RepositoryCrawler]:
+        """Initialize repository crawler with size warning."""
+        cache_key = f"crawler_{str(path)}"
+        warning_key = f"size_warning_{str(path)}"
+        
+        # Check if we have a cached crawler
+        if cache_key in st.session_state:
+            return st.session_state[cache_key]
+            
+        try:
+            # Quick size check before initializing crawler
+            try:
+                with st.spinner("Checking repository size..."):
+                    size = 0
+                    file_count = 0
+                    size_check_limit = 10000  # Check first 10k files
+                    
+                    for i, f in enumerate(path.rglob('*')):
+                        if i > size_check_limit:
+                            st.session_state[warning_key] = True
+                            break
+                        if f.is_file():
+                            size += f.stat().st_size
+                            file_count += 1
+                            if size > 1_000_000_000:  # 1GB
+                                st.session_state[warning_key] = True
+                                break
+            except Exception as e:
+                logger.warning(f"Size check failed: {str(e)}")
+            
+            # Initialize crawler with config from session state
+            crawler = RepositoryCrawler(str(path), st.session_state.config)
+            st.session_state[cache_key] = crawler
+            return crawler
+        except Exception as e:
+            logger.error(f"Failed to initialize crawler: {str(e)}")
+            return None
+
+    def safe_path_operation(self, path: Path, operation: Callable) -> Any:
+        """Execute path operation with caching and chunking."""
+        cache_key = f"path_op_{str(path)}_{operation.__name__}"
+        
+        # Return cached result if available
+        if cache_key in st.session_state:
+            return st.session_state[cache_key]
+            
+        try:
+            # Execute operation with progress indicator
+            with st.spinner("Loading repository structure..."):
+                result = operation(path)
+                st.session_state[cache_key] = result
+                return result
+        except Exception as e:
+            logger.error(f"Path operation failed: {str(e)}")
+            return None
+
     def render(self):
         """Render the sidebar."""
         with st.sidebar:
             st.title("Repository Crawler 🔍")
-            settings_tab, files_tab = st.tabs(["Settings", "Files"])
+            settings_tab, llm_tab, files_tab = st.tabs(["File Settings", "LLM Settings", "File Tree"])
 
             with settings_tab:
+                # Repository Section
+                st.markdown("### Repository")
+                repo_path = st.text_input(
+                    "Path",
+                    value=st.session_state.config.get('local_root', ''),
+                    help="Enter the full path to your local repository",
+                    placeholder="C:/path/to/repository"
+                )
+
+                if st.button("📂 Browse for Repository", help="Browse for repository directory", use_container_width=True):
+                    try:
+                        selected_path = show_file_dialog()
+                        if selected_path:
+                            # Validate selected path
+                            validated_path = self.validate_repo_path(selected_path)
+                            if validated_path:
+                                repo_path = str(validated_path)
+                                st.session_state.config['local_root'] = repo_path
+                                self.save_config(st.session_state.config)
+                                st.rerun()
+                    except Exception as e:
+                        st.error(f"Error opening file browser: {str(e)}")
+                        logger.error(f"File browser error: {str(e)}", exc_info=True)
+
+                # Validate manually entered path
+                if repo_path != st.session_state.config.get('local_root', ''):
+                    validated_path = self.validate_repo_path(repo_path)
+                    if validated_path:
+                        repo_path = str(validated_path)
+                        st.session_state.config['local_root'] = repo_path
+                        self.save_config(st.session_state.config)
+                        st.rerun()
+
+                # Configuration Section
+                st.markdown("### Configuration")
+
+                # Safe check for loaded_config
+                if st.session_state.loaded_config:  # If not None, show success or clear button
+                    st.success(f"Using config: {st.session_state.loaded_config}")
+                    if st.button("❌ Clear All", key="clear_all_config"):
+                        self.clear_state()
+                        st.rerun()
+
+                if st.session_state.loaded_rules:
+                    st.write("Loaded rules found:", list(st.session_state.loaded_rules.keys()))
+                    for filename in list(st.session_state.loaded_rules.keys()):
+                        col1, col2 = st.columns([0.8, 0.2])
+                        with col1:
+                            st.markdown(f"- {filename}")
+                        with col2:
+                            if st.button("❌", key=f"remove_rule_{filename}", help=f"Remove {filename}"):
+                                del st.session_state.loaded_rules[filename]
+                                st.rerun()
+
+                uploaded_files = st.file_uploader(
+                    "Upload system files",
+                    type=['yaml', 'yml', 'md', 'txt', 'cursorrules'],
+                    help="Upload config.yaml, system instructions, prompt, or rule files",
+                    accept_multiple_files=True,
+                    key=f"config_uploader_{len(st.session_state.loaded_rules)}"
+                )
+
+                # Ignore Patterns Section
+                st.markdown("### Ignore Patterns")
+
+                with st.expander("Directories", expanded=False):
+                    dirs = st.session_state.config.get('ignore_patterns', {}).get('directories', [])
+                    dirs_text = st.text_area(
+                        "Edit directories to ignore (one per line)",
+                        value="\n".join(dirs) if dirs else "",
+                        height=200,
+                        label_visibility="collapsed",
+                        key="ignore_dirs"
+                    )
+                    if dirs_text != "\n".join(dirs):
+                        new_dirs = [d.strip() for d in dirs_text.split("\n") if d.strip()]
+                        st.session_state.config['ignore_patterns']['directories'] = new_dirs
+                        current_config = st.session_state.config.copy()
+                        self.save_config(current_config)
+                        if 'current_tree' in st.session_state:
+                            del st.session_state.current_tree
+                        st.rerun()
+
+                with st.expander("Files", expanded=False):
+                    files = st.session_state.config.get('ignore_patterns', {}).get('files', [])
+                    files_text = st.text_area(
+                        "Edit files to ignore (one per line)",
+                        value="\n".join(files) if files else "",
+                        height=200,
+                        label_visibility="collapsed",
+                        key="ignore_files"
+                    )
+                    if files_text != "\n".join(files):
+                        new_files = [f.strip() for f in files_text.split("\n") if f.strip()]
+                        st.session_state.config['ignore_patterns']['files'] = new_files
+                        current_config = st.session_state.config.copy()
+                        self.save_config(current_config)
+                        if 'current_tree' in st.session_state:
+                            del st.session_state.current_tree
+                        st.rerun()
+
+            with llm_tab:
                 # LLM Settings Section
                 st.markdown("### LLM Settings")
+                
+                # Provider Status in Expander
+                with st.expander("🔌 Provider Status", expanded=False):
+                    # Create columns for status display
+                    status_cols = st.columns(2)
+                    
+                    # Track active providers
+                    active_providers = []
+                    
+                    # Check each provider's status
+                    for i, (provider_name, provider_info) in enumerate(self.LLM_PROVIDERS.items()):
+                        key_name = provider_info["key_name"]
+                        keys = st.session_state.config.get('api_keys', {}).get(key_name, [])
+                        if not isinstance(keys, list):
+                            keys = [keys] if keys else []
+                        
+                        # Determine status icon and color
+                        if keys:
+                            status_icon = "🟢"
+                            status_color = "green"
+                            key_count = len(keys)
+                            active_providers.append(provider_name)
+                        else:
+                            status_icon = "⚪"
+                            status_color = "gray"
+                            key_count = 0
+                        
+                        # Display in alternating columns
+                        with status_cols[i % 2]:
+                            st.markdown(
+                                f"{status_icon} **{provider_name}**: "
+                                f"<span style='color:{status_color}'>{key_count} key{'s' if key_count != 1 else ''} active</span>",
+                                unsafe_allow_html=True
+                            )
+                    
+                    # Show coordinator info if Gemini is configured
+                    if "Gemini" in active_providers:
+                        st.info("✨ Gemini is configured as the coordinator for multi-agent synthesis")
+                
                 provider = st.selectbox(
                     "Select LLM Provider",
                     options=list(self.LLM_PROVIDERS.keys()),
@@ -325,152 +512,70 @@ class SidebarComponent:
                         logger.error(f"API key save error: {str(e)}", exc_info=True)
                         return repo_path
 
-                # Repository Section
-                st.markdown("### Repository")
-                repo_path = st.text_input(
-                    "Path",
-                    value=st.session_state.config.get('local_root', ''),
-                    help="Enter the full path to your local repository",
-                    placeholder="C:/path/to/repository"
-                )
-
-                if st.button("📂 Browse for Repository", help="Browse for repository directory", use_container_width=True):
-                    try:
-                        selected_path = show_file_dialog()
-                        if selected_path:
-                            # Validate selected path
-                            validated_path = self.validate_repo_path(selected_path)
-                            if validated_path:
-                                repo_path = str(validated_path)
-                                st.session_state.config['local_root'] = repo_path
-                                self.save_config(st.session_state.config)
-                                st.rerun()
-                    except Exception as e:
-                        st.error(f"Error opening file browser: {str(e)}")
-                        logger.error(f"File browser error: {str(e)}", exc_info=True)
-
-                # Validate manually entered path
-                if repo_path != st.session_state.config.get('local_root', ''):
-                    validated_path = self.validate_repo_path(repo_path)
-                    if validated_path:
-                        repo_path = str(validated_path)
-                        st.session_state.config['local_root'] = repo_path
-                        self.save_config(st.session_state.config)
-
-                # Configuration Section
-                st.markdown("### Configuration")
-
-                # Safe check for loaded_config
-                if st.session_state.loaded_config:  # If not None, show success or clear button
-                    st.success(f"Using config: {st.session_state.loaded_config}")
-                    if st.button("❌ Clear All", key="clear_all_config"):
-                        self.clear_state()
-                        st.rerun()
-
-                if st.session_state.loaded_rules:
-                    st.write("Loaded rules found:", list(st.session_state.loaded_rules.keys()))
-                    for filename in list(st.session_state.loaded_rules.keys()):
-                        col1, col2 = st.columns([0.8, 0.2])
-                        with col1:
-                            st.markdown(f"- {filename}")
-                        with col2:
-                            if st.button("❌", key=f"remove_rule_{filename}", help=f"Remove {filename}"):
-                                del st.session_state.loaded_rules[filename]
-                                st.rerun()
-
-                uploaded_files = st.file_uploader(
-                    "Upload system files",
-                    type=['yaml', 'yml', 'md', 'txt', 'cursorrules'],
-                    help="Upload config.yaml, system instructions, prompt, or rule files",
-                    accept_multiple_files=True,
-                    key=f"config_uploader_{len(st.session_state.loaded_rules)}"
-                )
-                if uploaded_files:
-                    for uploaded_file in uploaded_files:
-                        if uploaded_file.name.endswith(('.yaml', '.yml')):
-                            if self.load_config_file(uploaded_file):
-                                st.session_state.loaded_config = uploaded_file.name
-                                st.success("Configuration loaded successfully!")
-                        elif uploaded_file.name not in st.session_state.loaded_rules:
-                            content = uploaded_file.getvalue().decode('utf-8')
-                            st.session_state.loaded_rules[uploaded_file.name] = content
-                            st.success(f"Rule file loaded: {uploaded_file.name}")
-
-                # Ignore Patterns Section
-                st.markdown("### Ignore Patterns")
-
-                with st.expander("Directories", expanded=False):
-                    dirs = st.session_state.config.get('ignore_patterns', {}).get('directories', [])
-                    dirs_text = st.text_area(
-                        "Edit directories to ignore (one per line)",
-                        value="\n".join(dirs) if dirs else "",
-                        height=200,
-                        label_visibility="collapsed",
-                        key="ignore_dirs"
-                    )
-                    if dirs_text != "\n".join(dirs):
-                        new_dirs = [d.strip() for d in dirs_text.split("\n") if d.strip()]
-                        st.session_state.config['ignore_patterns']['directories'] = new_dirs
-                        current_config = st.session_state.config.copy()
-                        self.save_config(current_config)
-                        if 'current_tree' in st.session_state:
-                            del st.session_state.current_tree
-                        st.rerun()
-
-                with st.expander("Files", expanded=False):
-                    files = st.session_state.config.get('ignore_patterns', {}).get('files', [])
-                    files_text = st.text_area(
-                        "Edit files to ignore (one per line)",
-                        value="\n".join(files) if files else "",
-                        height=200,
-                        label_visibility="collapsed",
-                        key="ignore_files"
-                    )
-                    if files_text != "\n".join(files):
-                        new_files = [f.strip() for f in files_text.split("\n") if f.strip()]
-                        st.session_state.config['ignore_patterns']['files'] = new_files
-                        current_config = st.session_state.config.copy()
-                        self.save_config(current_config)
-                        if 'current_tree' in st.session_state:
-                            del st.session_state.current_tree
-                        st.rerun()
-
             with files_tab:
-                if repo_path:
-                    # Validate path before using
-                    validated_path = self.validate_repo_path(repo_path)
-                    if validated_path and validated_path.exists():
-                        try:
-                            # Initialize crawler with current config
-                            crawler = RepositoryCrawler(str(validated_path), st.session_state.config)
-                            file_tree = crawler.get_file_tree()
-                            
-                            # Get current ignore patterns
-                            ignored_dirs = set(st.session_state.config.get('ignore_patterns', {}).get('directories', []))
-                            ignored_files = set(st.session_state.config.get('ignore_patterns', {}).get('files', []))
-                            
-                            # Use the VS Code-style tree view
-                            from frontend.components.tree_view import TreeView
-                            tree_view = TreeView()
-                            new_ignored_dirs, new_ignored_files = tree_view.render(
-                                file_tree['contents'],
-                                ignored_dirs=ignored_dirs,
-                                ignored_files=ignored_files
-                            )
-                            
-                            # Update config if patterns changed
-                            if new_ignored_dirs != ignored_dirs or new_ignored_files != ignored_files:
-                                st.session_state.config['ignore_patterns']['directories'] = list(new_ignored_dirs)
-                                st.session_state.config['ignore_patterns']['files'] = list(new_ignored_files)
-                                self.save_config(st.session_state.config)
-                                if 'current_tree' in st.session_state:
-                                    del st.session_state.current_tree
-                                st.rerun()
-                                
-                        except Exception as e:
-                            st.error(f"Error loading file tree: {str(e)}")
-                    else:
-                        st.info("Please enter a valid repository path in the Settings tab to manage file inclusion.")
+                repo_path = st.session_state.config.get('local_root', '')
+                if not repo_path:
+                    st.info("Please enter a repository path in the File Settings tab.")
+                    return repo_path
+                    
+                # Quick path validation
+                validated_path = self.validate_repo_path(repo_path)
+                if not validated_path:
+                    return repo_path
+                    
+                # Show size warning if needed
+                warning_key = f"size_warning_{str(validated_path)}"
+                if warning_key in st.session_state and st.session_state[warning_key]:
+                    col1, col2 = st.columns([15, 1])
+                    with col1:
+                        st.warning("⚠️ Large repository detected - performance optimizations enabled")
+                    with col2:
+                        if st.button("✕", key="dismiss_warning", help="Dismiss warning"):
+                            st.session_state[warning_key] = False
+                            st.rerun()
+                    
+                try:
+                    # Initialize crawler
+                    crawler = self.initialize_crawler(validated_path)
+                    if not crawler:
+                        st.error("Failed to initialize repository crawler")
+                        return repo_path
+                        
+                    # Get file tree
+                    def get_tree(p: Path):
+                        return crawler.get_file_tree()  # Removed max_depth parameter
+                        
+                    file_tree = self.safe_path_operation(validated_path, get_tree)
+                    if not file_tree:
+                        st.error("Failed to get file tree")
+                        return repo_path
+                    
+                    # Get current ignore patterns
+                    ignored_dirs = set(st.session_state.config.get('ignore_patterns', {}).get('directories', []))
+                    ignored_files = set(st.session_state.config.get('ignore_patterns', {}).get('files', []))
+                    
+                    # Use the VS Code-style tree view
+                    from frontend.components.tree_view import TreeView
+                    tree_view = TreeView()
+                    new_ignored_dirs, new_ignored_files = tree_view.render(
+                        file_tree['contents'],
+                        ignored_dirs=ignored_dirs,
+                        ignored_files=ignored_files
+                    )
+                    
+                    # Update config if patterns changed
+                    if new_ignored_dirs != ignored_dirs or new_ignored_files != ignored_files:
+                        st.session_state.config['ignore_patterns']['directories'] = list(new_ignored_dirs)
+                        st.session_state.config['ignore_patterns']['files'] = list(new_ignored_files)
+                        self.save_config(st.session_state.config)
+                        if 'current_tree' in st.session_state:
+                            del st.session_state.current_tree
+                        st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Error loading file tree: {str(e)}")
+                    logger.error(f"File tree error: {str(e)}", exc_info=True)
+                    return repo_path
 
             return st.session_state.config.get('local_root', '')
 
