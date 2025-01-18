@@ -1,4 +1,5 @@
 # NOTE: This project is still in progress and unfinished
+# You can grab the dev branch for features in development, but there are currently many bugs as I am using an experimental AI only development technique. This entire program was written by AI ONLY
 
 # Repository Crawler 🔍
 
