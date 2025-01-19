@@ -284,6 +284,37 @@ def render_chat():
                 help="Use multiple agents to analyze your question and synthesize a comprehensive answer")
             
             if use_deep_think:
+                # Add provider selection
+                st.markdown("### Available Providers")
+                
+                # Get all configured providers
+                available_providers = {}
+                for provider_name, provider_info in SidebarComponent.LLM_PROVIDERS.items():
+                    key_name = provider_info["key_name"]
+                    keys = st.session_state.config.get('api_keys', {}).get(key_name, [])
+                    if not isinstance(keys, list):
+                        keys = [keys] if keys else []
+                    if keys:
+                        available_providers[provider_name] = provider_info
+                
+                if not available_providers:
+                    st.warning("No API keys configured. Please add API keys in the sidebar settings.")
+                else:
+                    # Create provider selection
+                    selected_providers = {}
+                    for provider_name, provider_info in available_providers.items():
+                        selected_providers[provider_name] = st.checkbox(
+                            f"Use {provider_name}",
+                            value=True,
+                            help=f"Allow {provider_name} models to be used by the system"
+                        )
+                
+                    # Store selected providers in session state
+                    st.session_state.selected_providers = {
+                        name: info for name, info in available_providers.items() 
+                        if selected_providers.get(name, False)
+                    }
+                
                 num_agents = st.slider(
                     "Number of Thinking Agents",
                     min_value=2,
@@ -292,50 +323,51 @@ def render_chat():
                     help="How many agents should independently analyze and answer before reaching consensus"
                 )
                 st.session_state.deep_think_agents = num_agents
+
+                # Show DeepSeek temperature settings if DeepSeek is selected
+                if "DeepSeek" in st.session_state.selected_providers:
+                    st.markdown("#### DeepSeek Temperature Settings")
+                    use_case = st.selectbox(
+                        "Select Use Case",
+                        options=[
+                            "Coding / Math",
+                            "Data Cleaning / Analysis",
+                            "General Conversation",
+                            "Translation",
+                            "Creative Writing"
+                        ],
+                        help="Different use cases work better with different temperature settings"
+                    )
+                    
+                    # Show the corresponding temperature
+                    temperatures = {
+                        "Coding / Math": 0.0,
+                        "Data Cleaning / Analysis": 1.0,
+                        "General Conversation": 1.3,
+                        "Translation": 1.3,
+                        "Creative Writing": 1.5
+                    }
+                    
+                    selected_temp = temperatures[use_case]
+                    st.info(f"Recommended temperature for {use_case}: {selected_temp}")
+                    
+                    # Allow manual override
+                    custom_temp = st.slider(
+                        "Custom Temperature",
+                        min_value=0.0,
+                        max_value=2.0,
+                        value=selected_temp,
+                        step=0.1,
+                        help="Higher values = more creative, Lower values = more precise"
+                    )
+                    
+                    # Store in session state
+                    st.session_state.config['deepseek_temperature'] = custom_temp
             else:
                 if 'deep_think_agents' in st.session_state:
                     del st.session_state.deep_think_agents
-
-            # Add DeepSeek temperature settings if DeepSeek is selected
-            provider = st.session_state.config.get('llm_provider')
-            if provider == "DeepSeek":
-                st.markdown("#### DeepSeek Temperature Settings")
-                use_case = st.selectbox(
-                    "Select Use Case",
-                    options=[
-                        "Coding / Math",
-                        "Data Cleaning / Analysis",
-                        "General Conversation",
-                        "Translation",
-                        "Creative Writing"
-                    ],
-                    help="Different use cases work better with different temperature settings"
-                )
-                
-                # Show the corresponding temperature
-                temperatures = {
-                    "Coding / Math": 0.0,
-                    "Data Cleaning / Analysis": 1.0,
-                    "General Conversation": 1.3,
-                    "Translation": 1.3,
-                    "Creative Writing": 1.5
-                }
-                
-                selected_temp = temperatures[use_case]
-                st.info(f"Recommended temperature for {use_case}: {selected_temp}")
-                
-                # Allow manual override
-                custom_temp = st.slider(
-                    "Custom Temperature",
-                    min_value=0.0,
-                    max_value=2.0,
-                    value=selected_temp,
-                    step=0.1,
-                    help="Higher values = more creative, Lower values = more precise"
-                )
-                
-                # Store in session state
-                st.session_state.config['deepseek_temperature'] = custom_temp
+                if 'selected_providers' in st.session_state:
+                    del st.session_state.selected_providers
 
         # Token analysis section between settings and chat
         analysis_container = st.container()
@@ -762,24 +794,32 @@ def process_chat_message(prompt: str, show_message: bool = True, is_chunk: bool 
     # For regular messages after analysis, include the final analysis in context
     with st.chat_message("assistant"):
         try:
-            # Get the last non-chunk assistant message (final analysis)
-            final_analysis = None
-            for msg in reversed(st.session_state.messages):
-                if msg["role"] == "assistant" and "Analyzing chunk" not in msg["content"]:
-                    final_analysis = msg
-                    break
+            # Get condensed chat history for context
+            condensed_history = []
+            for msg in reversed(st.session_state.messages[1:]):  # Skip system message
+                if msg["role"] == "assistant":
+                    if "TECHNICAL ARCHITECTURE:" in msg["content"] or "Key Insights:" in msg["content"]:
+                        condensed_history.append(msg)
+                        break
+                else:
+                    condensed_history.append(msg)
+            condensed_history.reverse()
             
             # Prepare messages for API
             messages_for_api = [
                 st.session_state.messages[0],  # System message
             ]
             
-            # Add final analysis if available
-            if final_analysis:
-                messages_for_api.append(final_analysis)
+            # Add condensed history if available
+            if condensed_history:
+                messages_for_api.extend(condensed_history)
             
-            # Add current question
-            messages_for_api.append({"role": "user", "content": prompt})
+            # Add current question with context reminder
+            context_prompt = f"""Previous discussion included a detailed analysis from multiple expert agents. 
+Keep that context in mind while answering this follow-up question:
+
+{prompt}"""
+            messages_for_api.append({"role": "user", "content": context_prompt})
 
             # Get response from selected provider
             if provider == "OpenAI":
@@ -1062,17 +1102,24 @@ class DistributedCognitionSystem:
         Uses the Delegator agent to analyze a prompt and determine required specialists.
         Returns list of tuples: (agent_id, provider, model)
         """
+        # Get selected providers from session state
+        selected_providers = st.session_state.get('selected_providers', {})
+        if not selected_providers:
+            logger.warning("No providers selected for deep think analysis")
+            return [
+                (1, "Anthropic", "claude-3-sonnet"),
+                (2, "Anthropic", "claude-3-sonnet"),
+                (3, "OpenAI", "gpt-4")
+            ]
+            
         # Prepare system prompt for delegator
         system_prompt = """You are the Delegator agent responsible for analyzing tasks and selecting the most appropriate specialist team.
         
 Available specialists:
 {}
 
-Provider Strengths:
-- GPT-4: Excels at finding bugs, code review, security analysis, and error handling
-- Claude-3 Sonnet: Excels at code generation, implementation details, architecture design, and documentation
-- Gemini: Good for coordination and synthesis
-- DeepSeek: Good for specific domain tasks
+Available Providers and their strengths:
+{}
 
 Your task is to:
 1. Analyze the given prompt/task
@@ -1080,15 +1127,21 @@ Your task is to:
 3. Select 3-5 most relevant specialists and assign them the most appropriate provider based on the task
 4. Explain why each specialist and provider combination was chosen
 
-Format your response as:
+You MUST format your response EXACTLY as follows:
 SELECTED_SPECIALISTS:
 - ID: [id], Provider: [provider], Model: [model] - Reason: [explanation]
 
-Example:
+For example:
 SELECTED_SPECIALISTS:
 - ID: 3, Provider: OpenAI, Model: gpt-4 - Reason: Security analysis requires GPT-4's strength in finding edge cases
 - ID: 2, Provider: Anthropic, Model: claude-3-sonnet - Reason: Implementation requires Claude's code generation capabilities
-""".format("\n".join(f"{id}: {role}" for id, role in self.agent_roles.items() if id != 0))
+
+DO NOT include any other text or explanations outside this format.
+""".format(
+    "\n".join(f"{id}: {role}" for id, role in self.agent_roles.items() if id != 0),
+    "\n".join(f"- {name}: {info.get('description', 'No description available')}" 
+             for name, info in selected_providers.items())
+)
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -1097,14 +1150,35 @@ SELECTED_SPECIALISTS:
 
         try:
             response_content = None
-            # Use Gemini as the delegator if available
-            if "GEMINI_API_KEY" in st.session_state.config.get('api_keys', {}):
+            # Use Gemini as the delegator if available and selected
+            if "Gemini" in selected_providers and "GEMINI_API_KEY" in st.session_state.config.get('api_keys', {}):
                 import google.generativeai as genai
-                genai.configure(api_key=st.session_state.config['api_keys']['GEMINI_API_KEY'])
+                logger.info("Using Gemini as delegator")
+                
+                # Get Gemini API key and handle list case
+                gemini_api_key = st.session_state.config['api_keys']['GEMINI_API_KEY']
+                if isinstance(gemini_api_key, list):
+                    if not gemini_api_key:
+                        raise ValueError("No Gemini API key available")
+                    gemini_api_key = gemini_api_key[0]
+                
+                genai.configure(api_key=gemini_api_key)
                 model = genai.GenerativeModel('gemini-1.5-pro-latest')
                 chat = model.start_chat(history=[])
+                
+                # Add more explicit formatting instructions for Gemini
+                gemini_prompt = f"""TASK: Analyze this prompt and select specialists.
+PROMPT: {prompt}
+
+INSTRUCTIONS:
+{system_prompt}
+
+Remember to ONLY output the SELECTED_SPECIALISTS section with the exact format shown in the example.
+Only use providers from this list: {', '.join(selected_providers.keys())}
+"""
+                
                 response = chat.send_message(
-                    f"{system_prompt}\n\n{prompt}",
+                    gemini_prompt,
                     generation_config=genai.types.GenerationConfig(
                         temperature=0.3,
                         top_p=0.8,
@@ -1112,9 +1186,12 @@ SELECTED_SPECIALISTS:
                     )
                 )
                 response_content = response.text
+                
+                # Log Gemini's response for debugging
+                logger.info(f"Gemini delegator response: {response_content}")
             else:
-                # Fallback to original provider if Gemini not available
-                if provider == "OpenAI":
+                # Fallback to original provider if Gemini not available/selected
+                if provider == "OpenAI" and "OpenAI" in selected_providers:
                     from openai import AsyncOpenAI
                     client = AsyncOpenAI(api_key=api_key)
                     response = await client.chat.completions.create(
@@ -1124,7 +1201,7 @@ SELECTED_SPECIALISTS:
                         timeout=30
                     )
                     response_content = response.choices[0].message.content
-                elif provider == "Anthropic":
+                elif provider == "Anthropic" and "Anthropic" in selected_providers:
                     from anthropic import AsyncAnthropic
                     client = AsyncAnthropic(api_key=api_key)
                     response = await client.messages.create(
@@ -1144,35 +1221,67 @@ SELECTED_SPECIALISTS:
                     pattern = r'ID:\s*(\d+),\s*Provider:\s*(\w+),\s*Model:\s*([\w-]+)'
                     matches = re.finditer(pattern, response_content)
                     
-                    for match in matches:
+                    # Log the full response for debugging
+                    logger.info("Attempting to parse Gemini response:")
+                    logger.info(f"Raw response: {response_content}")
+                    
+                    # Track all matches for debugging
+                    all_matches = list(matches)
+                    logger.info(f"Found {len(all_matches)} matches in response")
+                    
+                    for match in all_matches:
                         agent_id = int(match.group(1))
                         provider = match.group(2)
                         model = match.group(3)
                         
+                        logger.info(f"Parsed match - ID: {agent_id}, Provider: {provider}, Model: {model}")
+                        
                         # Validate agent_id and provider
-                        if 0 < agent_id <= len(self.agent_roles) and provider in SidebarComponent.LLM_PROVIDERS:
-                            specialists.append((agent_id, provider, model))
+                        if 0 < agent_id <= len(self.agent_roles):
+                            if provider in selected_providers:  # Only use selected providers
+                                specialists.append((agent_id, provider, model))
+                                logger.info(f"Added specialist: {agent_id}, {provider}, {model}")
+                            else:
+                                logger.warning(f"Provider '{provider}' not selected for agent {agent_id}")
+                        else:
+                            logger.warning(f"Invalid agent_id {agent_id}")
                     
                     if specialists:
+                        logger.info(f"Returning {len(specialists)} specialists")
                         return specialists[:5]  # Limit to max 5 specialists
+                    else:
+                        logger.warning("No valid specialists found in response")
                         
                 except Exception as e:
                     logger.error(f"Error parsing delegator response: {str(e)}")
-                    
-            # Fallback to default selection if parsing fails
-            return [
-                (1, "Anthropic", "claude-3-sonnet"),  # Technical Architect with Claude
-                (2, "Anthropic", "claude-3-sonnet"),  # Implementation with Claude
-                (3, "OpenAI", "gpt-4")  # Security with GPT-4
-            ]
+                    logger.error(f"Response content was: {response_content}")
+                    # Fall through to default selection
+                
+                # Fallback to default selection using only selected providers
+                default_specialists = []
+                if "Anthropic" in selected_providers:
+                    default_specialists.extend([
+                        (1, "Anthropic", "claude-3-sonnet"),
+                        (2, "Anthropic", "claude-3-sonnet")
+                    ])
+                if "OpenAI" in selected_providers:
+                    default_specialists.append((3, "OpenAI", "gpt-4"))
+                
+                return default_specialists or [(1, list(selected_providers.keys())[0], selected_providers[list(selected_providers.keys())[0]]["models"][0])]
             
         except Exception as e:
             logger.error(f"Error in delegator analysis: {str(e)}")
-            return [
-                (1, "Anthropic", "claude-3-sonnet"),
-                (2, "Anthropic", "claude-3-sonnet"),
-                (3, "OpenAI", "gpt-4")
-            ]
+            # Fallback using only selected providers
+            default_specialists = []
+            if "Anthropic" in selected_providers:
+                default_specialists.extend([
+                    (1, "Anthropic", "claude-3-sonnet"),
+                    (2, "Anthropic", "claude-3-sonnet")
+                ])
+            if "OpenAI" in selected_providers:
+                default_specialists.append((3, "OpenAI", "gpt-4"))
+            
+            return default_specialists or [(1, list(selected_providers.keys())[0], selected_providers[list(selected_providers.keys())[0]]["models"][0])]
 
 async def process_deep_think_agent_async(prompt: str, model: str, api_key: str, provider: str, agent_id: int, 
                                        cognitive_system: DistributedCognitionSystem = None) -> str:
@@ -1361,27 +1470,44 @@ async def run_deep_think_analysis(prompt: str, model: str, api_key: str, provide
             filtered_specialists = [(1, available_provider, available_model)]
         
         # Show which roles and providers were selected
-        role_displays = []
+        progress_placeholder.markdown("### 🤖 Selected Analysis Team")
+        
+        # Create columns for agent display
+        agent_cols = progress_placeholder.columns(min(len(filtered_specialists), 3))
+        
         for i, (agent_id, agent_provider, agent_model) in enumerate(filtered_specialists):
             role = st.session_state.cognitive_system.get_agent_role(agent_id)
-            role_displays.append(f"🤖 Agent {i+1}: {role} (using {agent_provider} - {agent_model})")
+            specialization = role.split(' - ')[1] if ' - ' in role else role
+            
+            with agent_cols[i % 3]:
+                with st.expander(f"🤖 {role.split(' - ')[0]}", expanded=True):
+                    st.markdown(f"""
+                    **Specialization**:  
+                    {specialization}
+                    
+                    **Provider**: {agent_provider}  
+                    **Model**: {agent_model}
+                    
+                    **Status**: 🟡 Analyzing...
+                    """)
         
-        roles_display = "\n".join(role_displays)
-        progress_placeholder.markdown(
-            f"""### Selected Analysis Team:
-{roles_display}
-
-*Running analysis with specialized agents...*"""
-        )
+        progress_placeholder.markdown("---")
+        progress_placeholder.markdown("*Running analysis with specialized agents...*")
+        
+        # Store agents in session state for status updates
+        st.session_state.active_agents = filtered_specialists
         
         # Create tasks for specialized agents
         tasks = []
+        agent_statuses = {}  # Track agent completion status
+        
         for agent_id, agent_provider, agent_model in filtered_specialists:
             # Get provider-specific API key
             agent_api_key = get_api_key(agent_provider)
             if not agent_api_key:
                 continue
                 
+            agent_statuses[agent_id] = "running"
             task = process_deep_think_agent_async(
                 prompt, 
                 agent_model,
@@ -1390,46 +1516,69 @@ async def run_deep_think_analysis(prompt: str, model: str, api_key: str, provide
                 agent_id,
                 st.session_state.cognitive_system
             )
-            tasks.append(task)
+            tasks.append((agent_id, task))
         
         if not tasks:
             return "Error: No agents could be initialized. Please check API key configuration."
         
-        # Run all agents in parallel with timeout
-        agent_responses = await asyncio.wait_for(
-            asyncio.gather(*tasks),
-            timeout=90
-        )
+        # Run all agents in parallel with timeout and status updates
+        try:
+            agent_responses = []
+            for agent_id, task in tasks:
+                try:
+                    response = await asyncio.wait_for(task, timeout=90)
+                    agent_responses.append(response)
+                    agent_statuses[agent_id] = "completed"
+                    
+                    # Update agent status in UI
+                    role = st.session_state.cognitive_system.get_agent_role(agent_id)
+                    for col in agent_cols:
+                        if role.split(' - ')[0] in col.expander:
+                            col.expander.markdown(f"""
+                            **Status**: 🟢 Analysis Complete
+                            """)
+                except Exception as e:
+                    logger.error(f"Agent {agent_id} failed: {str(e)}")
+                    agent_statuses[agent_id] = "failed"
+                    agent_responses.append(f"Agent {agent_id} failed: {str(e)}")
+                    
+                    # Update failed status in UI
+                    role = st.session_state.cognitive_system.get_agent_role(agent_id)
+                    for col in agent_cols:
+                        if role.split(' - ')[0] in col.expander:
+                            col.expander.markdown(f"""
+                            **Status**: 🔴 Analysis Failed
+                            """)
+        except asyncio.TimeoutError:
+            return "Error: Analysis timed out. Please try again or reduce the number of agents."
         
-        # Update progress
-        progress_placeholder.markdown("✨ Analysis complete! Synthesizing insights...")
+        # Store final agent statuses
+        st.session_state.agent_statuses = agent_statuses
         
-        # Merge insights using the best available coordinator
-        coordinator_provider = None
-        for provider_name, info in available_providers.items():
-            if info.get("is_coordinator"):
-                coordinator_provider = provider_name
-                break
-        
-        if coordinator_provider == "Gemini" and "GEMINI_API_KEY" in st.session_state.config.get('api_keys', {}):
-            final_analysis = merge_summaries_with_gemini(
+        # Synthesize responses using DeepSeek
+        if "DeepSeek" in available_providers:
+            progress_placeholder.markdown("*Synthesizing insights from all agents...*")
+            final_response = await synthesize_insights(
                 agent_responses,
-                st.session_state.config['api_keys']['GEMINI_API_KEY']
+                get_api_key("DeepSeek"),
+                st.session_state.config.get('deepseek_temperature', 0.0)
             )
-        else:
-            # Use DeepSeek or fallback to original provider
-            if "DeepSeek" in available_providers:
-                final_analysis = await synthesize_insights(
-                    agent_responses,
-                    get_api_key("DeepSeek"),
-                    st.session_state.config.get('deepseek_temperature', 0.0)
-                )
-            else:
-                final_analysis = merge_summaries_with_coordinator(
-                    agent_responses, model, api_key, provider
-                )
+            progress_placeholder.empty()
+            return final_response
         
-        return final_analysis
+        # If DeepSeek not available, use Gemini as coordinator
+        if "Gemini" in available_providers:
+            progress_placeholder.markdown("*Synthesizing insights with Gemini...*")
+            final_response = merge_summaries_with_gemini(
+                agent_responses,
+                get_api_key("Gemini")
+            )
+            progress_placeholder.empty()
+            return final_response
+            
+        # Fallback to simple concatenation with headers
+        progress_placeholder.empty()
+        return "\n\n".join([f"Agent {i+1} Analysis:\n{response}" for i, response in enumerate(agent_responses)])
         
     except asyncio.TimeoutError:
         return "Analysis timed out. Please try again or reduce the number of agents."
@@ -1673,55 +1822,52 @@ async def synthesize_insights(insights: list, api_key: str, temperature: float =
     """Synthesize insights from multiple agents into a coherent response."""
     try:
         logger.info("Starting synthesis process...")
-        logger.info(f"Storing {len(insights)} agent responses")
+        logger.info(f"Synthesizing {len(insights)} agent responses")
         
-        # Technical Analysis Stage
-        tech_messages = [
-            {"role": "system", "content": "You are a technical analyst synthesizing insights about code."},
-            {"role": "user", "content": f"Analyze these technical insights and identify key patterns:\n\n{insights}"}
+        # Single Comprehensive Synthesis Stage
+        synthesis_messages = [
+            {"role": "system", "content": """You are a solution architect synthesizing insights from multiple specialist agents.
+Your task is to combine all their insights into a single, comprehensive, and well-structured response.
+The response should be detailed and cohesive, not showing any signs of being from separate agents.
+Structure the response with clear sections but maintain a unified voice throughout."""},
+            {"role": "user", "content": f"""Synthesize these specialist insights into a single comprehensive analysis:
+
+Agent Insights:
+{insights}
+
+Create a detailed, well-structured response that:
+1. Combines all technical insights, architectural patterns, and integration points
+2. Maintains a single coherent voice throughout
+3. Organizes information logically but without separate agent sections
+4. Provides specific, actionable recommendations
+5. Includes all relevant technical details from the specialists"""}
         ]
-        tech_analysis = await process_deepseek_request(tech_messages, api_key, temperature)
-        if not tech_analysis:
-            return "Error in technical analysis stage"
+        
+        final_response = await process_deepseek_request(synthesis_messages, api_key, temperature)
+        if not final_response:
+            return "Error in synthesis stage"
             
-        # Architecture Patterns Stage
-        arch_messages = [
-            {"role": "system", "content": "You are an architect identifying architectural patterns."},
-            {"role": "user", "content": f"Based on this technical analysis, what architectural patterns emerge?\n\n{tech_analysis}"}
-        ]
-        arch_patterns = await process_deepseek_request(arch_messages, api_key, temperature)
-        if not arch_patterns:
-            return "Error in architecture patterns stage"
-            
-        # Integration Points Stage
-        integration_messages = [
-            {"role": "system", "content": "You are an integration specialist identifying connection points."},
-            {"role": "user", "content": f"Given these patterns, what are the key integration points?\n\n{arch_patterns}"}
-        ]
-        integration_points = await process_deepseek_request(integration_messages, api_key, temperature)
-        if not integration_points:
-            return "Error in integration points stage"
-            
-        # Final Synthesis Stage
-        final_messages = [
-            {"role": "system", "content": "You are a solution architect creating final recommendations."},
-            {"role": "user", "content": f"""Synthesize a final recommendation based on:
-                Technical Analysis: {tech_analysis}
-                Architecture Patterns: {arch_patterns}
-                Integration Points: {integration_points}"""}
-        ]
-        final_response = await process_deepseek_request(final_messages, api_key, temperature)
         return final_response
             
     except Exception as e:
         logger.error(f"Error in synthesis: {str(e)}")
-        return f"Error in synthesis: {str(e)}" 
+        return f"Error in synthesis: {str(e)}"
 
 def merge_summaries_with_gemini(summaries: list[str], gemini_api_key: str) -> str:
     """
     Takes a list of partial 'summaries' from specialized agents
     and calls Gemini 1.5 to produce a single, well-structured final analysis.
+    Uses Gemini's full context window capacity.
     """
+    # Check if Gemini is selected for synthesis
+    selected_providers = st.session_state.get('selected_providers', {})
+    if "Gemini" not in selected_providers:
+        logger.warning("Gemini not selected for synthesis, falling back to Claude")
+        if "Anthropic" in selected_providers:
+            return merge_summaries_with_claude(summaries, get_api_key("Anthropic"))
+        else:
+            return "\n\n".join(summaries)  # Simple concatenation if no synthesizer available
+    
     import google.generativeai as genai
     from time import sleep
     
@@ -1735,19 +1881,57 @@ def merge_summaries_with_gemini(summaries: list[str], gemini_api_key: str) -> st
         # Configure Gemini
         genai.configure(api_key=gemini_api_key)
         
-        # Build system instruction
-        system_instruction = (
-            "You are a coordination agent responsible for synthesizing multiple code-chunk summaries "
-            "into a coherent final analysis. Your task is to:\n"
-            "1. Review all chunk summaries\n"
-            "2. Identify and connect related components across chunks\n"
-            "3. Resolve any conflicts or inconsistencies\n"
-            "4. Create a comprehensive but concise final analysis that:\n"
-            "   - Maintains crucial technical details\n"
-            "   - Explains the overall architecture\n"
-            "   - Highlights important relationships\n"
-            "   - Preserves specific implementation details\n\n"
-            "Your response should be clear, well-structured, and ready to be presented to the user.\n"
+        # Build enhanced system instruction
+        system_instruction = """You are a technical synthesis expert responsible for creating a comprehensive analysis from multiple specialist insights.
+Your task is to analyze all specialist insights and create a detailed, well-structured synthesis that captures all important technical details and recommendations.
+
+You MUST format your response with these EXACT sections:
+
+TECHNICAL ARCHITECTURE:
+- Key design patterns identified
+- System components and their relationships
+- Integration points and interfaces
+- Architectural considerations and tradeoffs
+
+IMPLEMENTATION DETAILS:
+- Core algorithms and approaches
+- Critical code structures
+- Important configurations
+- Dependencies and requirements
+
+RECOMMENDATIONS:
+- Specific, actionable improvements
+- Best practices to follow
+- Potential optimizations
+- Implementation priorities
+
+SECURITY & PERFORMANCE:
+- Security considerations and risks
+- Performance bottlenecks and solutions
+- Scalability factors
+- Resource requirements
+
+NEXT STEPS:
+- Prioritized action items
+- Implementation roadmap
+- Required resources
+- Risk mitigation strategies
+
+Each section should be detailed and specific, with code examples where relevant.
+Focus on providing actionable insights and clear technical direction.
+"""
+
+        # Format agent outputs into content
+        content = "SPECIALIST INSIGHTS:\n\n"
+        for i, summary in enumerate(summaries, start=1):
+            content += f"[Specialist {i}]:\n{summary}\n---\n"
+        
+        # Create generation config with increased output capacity
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.7,
+            top_p=0.9,
+            top_k=40,
+            max_output_tokens=8192  # Using maximum available output tokens
         )
 
         # Initialize model with system instruction
@@ -1756,29 +1940,13 @@ def merge_summaries_with_gemini(summaries: list[str], gemini_api_key: str) -> st
             system_instruction=system_instruction
         )
 
-        # Format agent outputs into content
-        content = "Here are partial summaries from specialized agents:\n\n"
-        for i, summary in enumerate(summaries, start=1):
-            content += f"---\n**Agent {i} Summary**:\n{summary}\n"
-        content += (
-            "\nPlease merge these into one final, cohesive analysis. "
-            "Add headings, bullet points, code examples, or anything needed for clarity.\n"
-        )
-
-        # Create generation config
-        generation_config = genai.types.GenerationConfig(
-            temperature=0.7,
-            top_p=0.8,
-            top_k=40,
-            max_output_tokens=4096
-        )
-
         # Send request with retry logic
         MAX_RETRIES = 3
         for attempt in range(MAX_RETRIES):
             try:
+                logger.info("Sending synthesis request to Gemini")
                 response = model.generate_content(
-                    content,
+                    f"{system_instruction}\n\nANALYZE AND SYNTHESIZE:\n{content}",
                     generation_config=generation_config
                 )
                 
@@ -1786,10 +1954,14 @@ def merge_summaries_with_gemini(summaries: list[str], gemini_api_key: str) -> st
                     logger.warning(f"Response blocked: {response.prompt_feedback.block_reason}")
                     return "Response was blocked due to content safety filters. Please try again with different content."
                 
+                # Log synthesis response for debugging
+                logger.info(f"Gemini synthesis response: {response.text}")
+                
                 return response.text
                 
             except Exception as e:
                 if "429" in str(e) and attempt < MAX_RETRIES - 1:  # Rate limit error
+                    logger.warning(f"Rate limit error, retrying in {2 ** attempt} seconds")
                     sleep(2 ** attempt)  # Exponential backoff
                     continue
                 elif attempt == MAX_RETRIES - 1:
@@ -1800,6 +1972,10 @@ def merge_summaries_with_gemini(summaries: list[str], gemini_api_key: str) -> st
                     
     except Exception as e:
         logger.error(f"Error in Gemini coordinator: {str(e)}")
+        # Try Claude as fallback if available
+        if "Anthropic" in selected_providers:
+            logger.info("Falling back to Claude for synthesis")
+            return merge_summaries_with_claude(summaries, get_api_key("Anthropic"))
         return f"Error synthesizing with Gemini: {str(e)}"
 
 def get_api_key(provider: str) -> Optional[str]:

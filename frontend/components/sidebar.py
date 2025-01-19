@@ -12,6 +12,7 @@ import tempfile
 import os
 from backend.core.crawler import RepositoryCrawler
 import fnmatch
+from utils.db_manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -91,26 +92,26 @@ class SidebarComponent:
     
     # Available LLM providers
     LLM_PROVIDERS = {
-        "OpenAI": {
-            "models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"],
-            "key_name": "OPENAI_API_KEY",
-            "supports_multiple_keys": True  # Flag to indicate multiple keys support
-        },
-        "Anthropic": {
-            "models": ["claude-2.1", "claude-instant"],
-            "key_name": "ANTHROPIC_API_KEY",
-            "supports_multiple_keys": True
-        },
         "DeepSeek": {
-            "models": ["deepseek-chat"],
             "key_name": "DEEPSEEK_API_KEY",
-            "supports_multiple_keys": True
+            "models": ["deepseek-chat"],
+            "description": "Specialized in code analysis and generation"
         },
         "Gemini": {
-            "models": ["gemini-1.5-pro-latest"],
             "key_name": "GEMINI_API_KEY",
-            "is_coordinator": True,  # Flag to indicate this is used for coordination
-            "supports_multiple_keys": True
+            "models": ["gemini-1.5-pro-latest"],
+            "description": "Strong at task coordination and synthesis",
+            "is_coordinator": True
+        },
+        "OpenAI": {
+            "key_name": "OPENAI_API_KEY",
+            "models": ["gpt-4", "gpt-3.5-turbo"],
+            "description": "General purpose with strong reasoning"
+        },
+        "Anthropic": {
+            "key_name": "ANTHROPIC_API_KEY",
+            "models": ["claude-3-opus", "claude-3-sonnet"],
+            "description": "Excels at detailed technical analysis"
         }
     }
 
@@ -121,6 +122,16 @@ class SidebarComponent:
         return cls._instance
 
     def __init__(self):
+        """Initialize sidebar component."""
+        self.db = DatabaseManager()
+        if 'config' not in st.session_state:
+            st.session_state.config = {}
+        
+        # Load saved API keys
+        saved_keys = self.db.get_api_keys()
+        if saved_keys:
+            st.session_state.config['api_keys'] = saved_keys
+        
         # Prevent multiple initializations in the same session
         if 'sidebar_initialized' not in st.session_state:
             st.session_state.sidebar_initialized = True

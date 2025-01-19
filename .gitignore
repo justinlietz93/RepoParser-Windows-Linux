@@ -96,6 +96,7 @@ api_keys.json
 secrets/
 credentials/
 auth/
+docs/
 
 # Temporary and Cache files
 *.tmp
