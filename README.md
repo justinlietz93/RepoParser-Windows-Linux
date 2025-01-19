@@ -34,8 +34,8 @@ Repository Crawler is an experimental tool that combines multi-agent LLM analysi
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/repo_crawler.git
-cd repo_crawler
+git clone https://github.com/justinlietz93/RepoPrompt-Windows-Linux.git
+cd RepoPrompt-Windows-Linux
 
 # Create and activate virtual environment
 python -m venv venv
