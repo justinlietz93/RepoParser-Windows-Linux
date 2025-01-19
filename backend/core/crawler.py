@@ -223,43 +223,75 @@ class RepositoryCrawler:
         """Check if directory should be ignored with proper error handling."""
         try:
             patterns = self.config.get('ignore_patterns', {}).get('directories', [])
-            
-            # Convert to relative path for matching
+            if not patterns:
+                return False
+                
+            # Convert to Path and get relative path
             dir_path = Path(dirname)
             if not dir_path.is_absolute():
                 dir_path = self.root_path / dir_path
                 
             try:
-                # Check all parent directories first
-                current = dir_path
-                while current != self.root_path and current != current.parent:
-                    try:
-                        rel_path = str(current.relative_to(self.root_path)).lower()  # Case-insensitive
-                        # Check exact matches
-                        if any(p.lower() == rel_path for p in patterns):
-                            logger.debug(f"Directory {rel_path} or parent exactly matches ignore pattern")
+                # Get relative path for matching
+                rel_path = str(dir_path.relative_to(self.root_path))
+                # Normalize path separators
+                rel_path = rel_path.replace('\\', '/')
+                
+                # Add variations of the path for matching
+                paths_to_check = [
+                    rel_path,                    # normal path
+                    f"/{rel_path}",              # with leading slash
+                    f"{rel_path}/",              # with trailing slash
+                    f"/{rel_path}/",             # with both slashes
+                ]
+                
+                # Check each pattern against all path variations
+                for pattern in patterns:
+                    pattern = pattern.replace('\\', '/')
+                    
+                    # Remove leading/trailing slashes from pattern for consistent matching
+                    pattern = pattern.strip('/')
+                    
+                    # Direct name match (for backwards compatibility)
+                    if pattern.lower() == dir_path.name.lower():
+                        logger.debug(f"Directory name matches pattern exactly: {dir_path.name} == {pattern}")
+                        return True
+                    
+                    # Check all path variations
+                    for path_var in paths_to_check:
+                        # Direct match
+                        if pattern.lower() == path_var.lower():
+                            logger.debug(f"Directory path matches pattern exactly: {path_var} == {pattern}")
                             return True
-                        # Check pattern matches
-                        for pattern in patterns:
-                            try:
-                                if fnmatch.fnmatch(rel_path.lower(), pattern.lower()):
-                                    logger.debug(f"Directory {rel_path} or parent matches pattern {pattern}")
-                                    return True
-                            except Exception as e:
-                                logger.warning(f"Error matching pattern {pattern}: {str(e)}")
-                                continue
-                    except ValueError:
-                        break
-                    current = current.parent
-                
+                            
+                        # Wildcard match
+                        if fnmatch.fnmatch(path_var.lower(), pattern.lower()):
+                            logger.debug(f"Directory path matches wildcard: {path_var} matches {pattern}")
+                            return True
+                            
+                        # Handle **/ prefix (match any parent directory)
+                        if pattern.startswith('**/'):
+                            suffix = pattern[3:]  # Remove **/
+                            if fnmatch.fnmatch(path_var.lower(), f"*/{suffix}".lower()):
+                                logger.debug(f"Directory matches **/ pattern: {path_var} matches {pattern}")
+                                return True
+                                
+                        # Handle /** suffix (match any subdirectory)
+                        if pattern.endswith('/**'):
+                            prefix = pattern[:-3]  # Remove /**
+                            if path_var.lower().startswith(prefix.lower()):
+                                logger.debug(f"Directory matches /** pattern: {path_var} matches {pattern}")
+                                return True
+                                
                 return False
                 
-            except ValueError:
-                logger.warning(f"Directory {dir_path} is not relative to root {self.root_path}")
-                return False
+            except ValueError as e:
+                # If we can't get relative path, just check the name
+                logger.debug(f"Falling back to name-only match for {dirname}: {e}")
+                return any(fnmatch.fnmatch(dir_path.name.lower(), pattern.lower()) for pattern in patterns)
                 
         except Exception as e:
-            logger.error(f"Error checking directory ignore status: {str(e)}")
+            logger.error(f"Error in _should_ignore_dir: {e}")
             return False
             
     def _should_ignore_file(self, filename: str) -> bool:

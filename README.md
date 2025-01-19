@@ -4,31 +4,102 @@
 > 
 > This project is under active development and is **NOT** production-ready. Use at your own discretion.
 > Features may be incomplete, unstable, or change without notice.
+> This project was written entirely by AI. Not a single line of code was written by a human.
 
 ## Overview
 
 Repository Crawler is an experimental tool that combines multi-agent LLM analysis with local codebase exploration. It provides a streamlined interface for code analysis, documentation, and understanding through:
 
-- 🌲 Interactive file tree visualization
-- 🤖 Multi-agent LLM analysis (up to 25 specialized roles)
+- 🌲 Interactive file tree visualization with VS Code-style interface
+- 🤖 Multi-agent LLM analysis with specialized roles
 - 💾 Persistent memory using ChromaDB
 - 📊 Real-time token usage and cost tracking
 - 🔄 Parallel agent analysis capabilities
 - 🔑 Flexible API key management
+- 🎯 Robust ignore pattern system
 
-## Current Status
+## Architecture
 
-- **Alpha Stage**: Core functionality is implemented but undergoing frequent changes
-- **Performance**: Large repositories may experience slowdowns
-- **Stability**: Expect occasional errors and edge cases
-- **Security**: Basic validation implemented, but needs further hardening
+Our system uses a multi-agent architecture for comprehensive code analysis:
 
-## Supported LLM Providers
+```mermaid
+graph TD
+    %% Main UI Components
+    A[User Interface] --> B[Sidebar Component]
+    B --> C[Repository Crawler]
+    C --> D[File System]
+    
+    %% LLM Integration
+    B --> E[LLM Integration]
+    E --> F[API Providers]
+    
+    %% Storage
+    C --> G[ChromaDB]
+    E --> G
+    
+    %% Pattern Matching
+    C --> H[Pattern Matcher]
+    H --> I[Config Manager]
+    
+    %% Chunking and Processing
+    C --> J[Chunk Manager]
+    J --> |Split Code| K[Code Chunks]
+    
+    %% Agent System
+    K --> L[Role Delegator]
+    L --> M[Agent Pool]
+    
+    subgraph Agents[Agent System]
+        M --> N1[Architecture Expert]
+        M --> N2[Security Auditor]
+        M --> N3[Performance Analyst]
+        M --> N4[Documentation Writer]
+        M --> N5[Code Reviewer]
+        N6[...Other Roles...]
+        
+        %% Agent Processing
+        N1 & N2 & N3 & N4 & N5 --> O[Parallel Processing]
+    end
+    
+    %% Memory and Context
+    G --> |Context| M
+    O --> |Updates| G
+    
+    %% Synthesis
+    O --> P[Gemini Synthesizer]
+    P --> |Aggregate Insights| Q[Response Generator]
+    Q --> |Format| R[Final Response]
+    R --> A
+    
+    %% Styling
+    classDef storage fill:#f9f,stroke:#333,stroke-width:2px,color:#000
+    classDef process fill:#bbf,stroke:#333,stroke-width:2px,color:#000
+    classDef agent fill:#bfb,stroke:#333,stroke-width:2px,color:#000
+    
+    class G,K storage
+    class J,L,O,P,Q process
+    class N1,N2,N3,N4,N5,N6 agent
+```
 
-- OpenAI (GPT-4, GPT-3.5)
-- Anthropic (Claude)
-- DeepSeek
-- Google (Gemini 1.5 Pro) - Coordinator for multi-agent synthesis
+## Features
+
+### Core Functionality
+- **File System Analysis**: Efficient traversal and analysis of large codebases
+- **Pattern Matching**: Robust ignore pattern system with wildcard support
+- **Multi-Agent Analysis**: Up to 25 specialized roles working in parallel
+- **Memory System**: Persistent context storage using ChromaDB
+
+### LLM Integration
+- **OpenAI**: GPT-4, GPT-3.5
+- **Anthropic**: Claude
+- **DeepSeek**: Code-specialized models
+- **Google**: Gemini 1.5 Pro (Coordinator)
+
+### User Interface
+- **Interactive Tree**: VS Code-style file navigation
+- **Syntax Highlighting**: Language-aware code display
+- **Configuration UI**: Easy pattern and API management
+- **Progress Tracking**: Real-time analysis status
 
 ## Installation
 
@@ -45,7 +116,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## Quick Start
 
 1. Start the application:
 ```bash
@@ -57,12 +128,45 @@ streamlit run main.py
    - Set up repository path in File Settings
    - Configure ignore patterns if needed
 
+3. Begin analysis:
+   - Select files/directories in the tree view
+   - Choose analysis type
+   - View results in real-time
+
+## Current Status
+
+### Implemented ✅
+- Basic file system traversal
+- Multi-provider LLM support
+- Interactive file tree
+- Configuration persistence
+- Robust ignore pattern system
+- API key handling
+- ChromaDB integration
+- Logging system
+
+### In Progress 🔄
+- Performance optimizations
+- Security enhancements
+- Error handling improvements
+- Memory management
+- Multi-agent coordination
+- Pattern matching optimization
+
+### Planned ⏳
+- Advanced caching system
+- Distributed analysis
+- Plugin architecture
+- Custom role definitions
+- Advanced security features
+- Pattern testing framework
+
 ## Known Limitations
 
 - Large repositories (>1GB or >10k files) may experience performance issues
 - Memory usage can be significant with large codebases
-- Some features are experimental and may not work as expected
 - UI responsiveness varies with repository size
+- Pattern matching overhead on deep directory structures
 
 ## Contributing
 
@@ -74,7 +178,7 @@ This project is in active development. While contributions are welcome, please n
 
 ## License
 
-[Your License Here]
+MIT License - See LICENSE file for details
 
 ## Disclaimer
 

@@ -53,7 +53,11 @@ def get_default_config():
                 'build','dist','.idea','.vscode','.vs','bin','obj','out','target',
                 'coverage','.coverage','.pytest_cache','.mypy_cache','.tox','.eggs',
                 '.sass-cache','bower_components','jspm_packages','.next','.nuxt',
-                '.serverless','.terraform','vendor'
+                '.serverless','.terraform','vendor',
+                # Queue directories
+                'queues', '**/queues/**', '**/queue', '**/queue/**',
+                '**/default/queue', '**/default/queues',
+                '**/default/request_queues/**', '**/storage/request_queues/**'
             ],
             'files': [
                 '*.pyc','*.pyo','*.pyd','*.so','*.dll','*.dylib','*.egg',
@@ -65,31 +69,88 @@ def get_default_config():
                 '*.user','*.userosscache','*.sln.docstates','thumbs.db','*.cache',
                 '*.bak','*.tmp','*.temp','*.pid','*.seed','*.pid.lock',
                 '*.tsbuildinfo','.eslintcache','.node_repl_history','.yarn-integrity',
-                '.grunt','.lock-wscript'
+                '.grunt','.lock-wscript',
+                # Queue files
+                '**/*.queue.json', '**/*.request.json', '**/*.response.json',
+                '**/queues/**/*.json', '**/queue/**/*.json',
+                '**/default/request_queues/**/*.json', '**/storage/request_queues/**/*.json'
             ]
         },
         'local_root': '',
         'model': 'gpt-4'
     }
 
-def reset_config():
-    """
-    Reset config.yaml to default, preserving 'loaded_rules'.
-    Only triggers if no config is in session, to avoid repeated resets on normal reruns.
-    """
+def load_config():
+    """Load config from disk, merging with defaults."""
+    config_path = Path(__file__).parent / 'config' / 'config.yaml'
+    default_config = get_default_config()
+    
+    if config_path.exists():
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                disk_config = yaml.safe_load(f) or {}
+                
+            # Deep merge the configs
+            merged_config = default_config.copy()
+            if disk_config and isinstance(disk_config, dict):
+                if 'ignore_patterns' in disk_config:
+                    if 'directories' in disk_config['ignore_patterns']:
+                        merged_config['ignore_patterns']['directories'].extend(
+                            [d for d in disk_config['ignore_patterns']['directories'] 
+                             if d not in merged_config['ignore_patterns']['directories']]
+                        )
+                    if 'files' in disk_config['ignore_patterns']:
+                        merged_config['ignore_patterns']['files'].extend(
+                            [f for f in disk_config['ignore_patterns']['files']
+                             if f not in merged_config['ignore_patterns']['files']]
+                        )
+                
+                # Merge other config keys
+                for key in disk_config:
+                    if key != 'ignore_patterns':
+                        merged_config[key] = disk_config[key]
+                        
+            return merged_config
+        except Exception as e:
+            logger.error(f"Error loading config from disk: {str(e)}")
+            return default_config
+    return default_config
+
+def save_config(config):
+    """Save config to disk."""
+    config_path = Path(__file__).parent / 'config' / 'config.yaml'
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    
     try:
-        config_path = Path(__file__).parent / 'config' / 'config.yaml'
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        default_config = get_default_config()
-
         with open(config_path, 'w', encoding='utf-8') as f:
-            yaml.dump(default_config, f, default_flow_style=False)
+            yaml.dump(config, f, default_flow_style=False)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving config to disk: {str(e)}")
+        return False
 
-        if 'config' in st.session_state:
-            st.session_state.config.update(default_config)
-        else:
-            st.session_state.config = default_config.copy()
-
+def reset_config():
+    """Reset config.yaml to default, preserving custom patterns."""
+    try:
+        # Get current config to preserve custom patterns
+        current_config = load_config() if 'config' not in st.session_state else st.session_state.config
+        default_config = get_default_config()
+        
+        # Merge custom patterns with defaults
+        if current_config and 'ignore_patterns' in current_config:
+            custom_dirs = set(current_config['ignore_patterns'].get('directories', [])) - set(default_config['ignore_patterns']['directories'])
+            custom_files = set(current_config['ignore_patterns'].get('files', [])) - set(default_config['ignore_patterns']['files'])
+            
+            if custom_dirs:
+                default_config['ignore_patterns']['directories'].extend(list(custom_dirs))
+            if custom_files:
+                default_config['ignore_patterns']['files'].extend(list(custom_files))
+        
+        # Save merged config
+        save_config(default_config)
+        
+        # Update session state
+        st.session_state.config = default_config.copy()
         if 'loaded_config' in st.session_state:
             st.session_state.loaded_config = None
         if 'current_tree' in st.session_state:
@@ -98,36 +159,20 @@ def reset_config():
             del st.session_state.crawler
         if 'config_hash' in st.session_state:
             del st.session_state.config_hash
-
-        logger.info("Configuration and session state reset to default values (excluding loaded_rules)")
+            
+        logger.info("Configuration reset while preserving custom patterns")
         return True
     except Exception as e:
         logger.error(f"Error resetting configuration: {str(e)}")
         return False
 
 def initialize_session_state():
-    """
-    Run once at startup to ensure there's a config in session. 
-    If missing, use reset_config(). 
-    Otherwise, do nothing to preserve existing session state.
-    """
+    """Initialize session state with config from disk."""
     if 'config' not in st.session_state:
-        if reset_config():
-            try:
-                config_path = Path(__file__).parent / 'config' / 'config.yaml'
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = yaml.safe_load(f)
-                    # Don't initialize API clients yet
-                    if 'api_keys' in config:
-                        st.session_state.config = {'api_keys': config['api_keys']}
-                    else:
-                        st.session_state.config = {}
-                logger.info("Configuration loaded successfully")
-            except Exception as e:
-                logger.error(f"Error loading configuration: {str(e)}")
-                st.error("Failed to load configuration file")
-                st.session_state.config = {}
-
+        config = load_config()
+        st.session_state.config = config
+        logger.info("Configuration loaded from disk")
+    
     if 'selected_file' not in st.session_state:
         st.session_state.selected_file = None
 

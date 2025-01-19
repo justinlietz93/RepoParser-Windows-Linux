@@ -95,7 +95,11 @@ def test_should_ignore_dir():
                 '**/storage',
                 '**/storage/**',
                 'datasets',
-                'request_queues'
+                '**/datasets',
+                '**/datasets/**',
+                'request_queues',
+                '**/request_queues',
+                '**/request_queues/**'
             ],
             'files': []
         }
@@ -117,17 +121,21 @@ def test_should_ignore_dir():
         ('path/to/storage/subdir', True),
         ('path/to/datasets', True),
         ('path/to/request_queues', True),
+        ('very/deep/path/to/datasets', True),
+        ('very/deep/path/to/storage/subdir', True),
         
         # Non-matches
         ('not_storage', False),
         ('my_datasets_folder', False),
         ('requests', False),
+        ('my_storage_temp', False)
     ]
     
     # Run tests
     for path, should_ignore in test_cases:
-        assert crawler._should_ignore_dir(path) == should_ignore, \
-            f"Failed for path: {path}, expected: {should_ignore}"
+        result = crawler._should_ignore_dir(path)
+        assert result == should_ignore, \
+            f"Failed for path: {path}, expected: {should_ignore}, got: {result}"
 
 def test_ignore_patterns_in_tree():
     """Test that ignored directories are excluded from file tree."""
