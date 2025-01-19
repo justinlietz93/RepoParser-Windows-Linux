@@ -3,7 +3,7 @@
 > ⚠️ **IMPORTANT: Work in Progress** ⚠️
 > 
 > This project is under active development and is **NOT** production-ready. Use at your own discretion.
-> Features may be incomplete, unstable, or change without notice.
+> Features may be incomplete, unstable, or change without notice. This entire app was created with AI prompting only, not a single line was written by a human.
 
 ## Overview
 
