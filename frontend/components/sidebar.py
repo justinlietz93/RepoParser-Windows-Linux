@@ -128,8 +128,8 @@ class SidebarComponent:
                     'directories': [],
                     'files': []
                 },
-                'llm_provider': 'OpenAI',
-                'model': 'gpt-4',
+                'llm_provider': 'DeepSeek',
+                'model': 'deepseek-chat',
                 'api_keys': {}
             }
             self.initialize_state()
@@ -258,6 +258,17 @@ class SidebarComponent:
             logger.error(f"Path operation failed: {str(e)}")
             return None
 
+    def validate_model_selection(self, provider: str, model: str) -> tuple[bool, str]:
+        """Validate if the selected model is available for the provider."""
+        if provider not in self.LLM_PROVIDERS:
+            return False, f"Provider '{provider}' is not supported"
+        
+        available_models = self.LLM_PROVIDERS[provider]["models"]
+        if model not in available_models:
+            return False, f"Model '{model}' is not available for {provider}. Available models: {', '.join(available_models)}"
+        
+        return True, ""
+
     def render(self):
         """Render the sidebar."""
         with st.sidebar:
@@ -380,6 +391,42 @@ class SidebarComponent:
                 # LLM Settings Section
                 st.markdown("### LLM Settings")
                 
+                # Provider Selection
+                current_provider = st.session_state.config.get('llm_provider', 'OpenAI')
+                new_provider = st.selectbox(
+                    "Provider",
+                    options=list(self.LLM_PROVIDERS.keys()),
+                    index=list(self.LLM_PROVIDERS.keys()).index(current_provider) if current_provider in self.LLM_PROVIDERS else 0
+                )
+
+                # Model Selection with validation
+                current_model = st.session_state.config.get('model', self.LLM_PROVIDERS[new_provider]["models"][0])
+                available_models = self.LLM_PROVIDERS[new_provider]["models"]
+                
+                # Ensure current_model is in available_models, otherwise use first available
+                if current_model not in available_models:
+                    current_model = available_models[0]
+                
+                new_model = st.selectbox(
+                    "Model",
+                    options=available_models,
+                    index=available_models.index(current_model)
+                )
+
+                # Update config if provider or model changed
+                if new_provider != current_provider or new_model != current_model:
+                    is_valid, error_msg = self.validate_model_selection(new_provider, new_model)
+                    if is_valid:
+                        st.session_state.config['llm_provider'] = new_provider
+                        st.session_state.config['model'] = new_model
+                        self.save_config(st.session_state.config)
+                    else:
+                        st.error(error_msg)
+                        # Reset to default model for the provider
+                        st.session_state.config['model'] = self.LLM_PROVIDERS[new_provider]["models"][0]
+                        self.save_config(st.session_state.config)
+                        st.rerun()
+
                 # Provider Status in Expander
                 with st.expander("🔌 Provider Status", expanded=False):
                     # Create columns for status display
@@ -418,28 +465,8 @@ class SidebarComponent:
                     if "Gemini" in active_providers:
                         st.info("✨ Gemini is configured as the coordinator for multi-agent synthesis")
                 
-                provider = st.selectbox(
-                    "Select LLM Provider",
-                    options=list(self.LLM_PROVIDERS.keys()),
-                    key="llm_provider"
-                )
-                
-                available_models = self.LLM_PROVIDERS[provider]["models"]
-                selected_model = st.selectbox(
-                    "Select Model",
-                    options=available_models,
-                    key="llm_model",
-                    index=available_models.index(st.session_state.config.get('model', available_models[0]))
-                )
-                
-                # Update config with selected model
-                if selected_model != st.session_state.config.get('model'):
-                    st.session_state.config['model'] = selected_model
-                    self.save_config(st.session_state.config)
-                    st.rerun()
-                
-                key_name = self.LLM_PROVIDERS[provider]["key_name"]
-                supports_multiple = self.LLM_PROVIDERS[provider].get("supports_multiple_keys", False)
+                key_name = self.LLM_PROVIDERS[new_provider]["key_name"]
+                supports_multiple = self.LLM_PROVIDERS[new_provider].get("supports_multiple_keys", False)
                 
                 # Get existing keys for this provider
                 existing_keys = st.session_state.config.get('api_keys', {}).get(key_name, [])
@@ -469,13 +496,13 @@ class SidebarComponent:
                 new_api_key = st.text_input(
                     f"Enter {key_name}",
                     type="password",
-                    key=f"new_api_key_{provider}"
+                    key=f"new_api_key_{new_provider}"
                 )
                 
                 if new_api_key:
                     try:
                         # Validate API key before saving
-                        if provider == "OpenAI":
+                        if new_provider == "OpenAI":
                             if not new_api_key.startswith("sk-"):
                                 st.error("Invalid OpenAI API key format. Should start with 'sk-'")
                                 return repo_path
@@ -489,10 +516,25 @@ class SidebarComponent:
                             except Exception as e:
                                 st.error(f"Invalid OpenAI API key: {str(e)}")
                                 return repo_path
-                        elif provider == "Anthropic" and not new_api_key.startswith("sk-ant-"):
-                            st.error("Invalid Anthropic API key format. Should start with 'sk-ant-'")
-                            return repo_path
-                        elif provider == "DeepSeek":
+                        elif new_provider == "Anthropic":
+                            if not new_api_key.startswith("sk-ant-"):
+                                st.error("Invalid Anthropic API key format. Should start with 'sk-ant-'")
+                                return repo_path
+                            # Test the API key
+                            try:
+                                from anthropic import Anthropic
+                                client = Anthropic(api_key=new_api_key)
+                                # Make a minimal API call to validate the key
+                                client.messages.create(
+                                    model="claude-3-sonnet",
+                                    max_tokens=1,
+                                    messages=[{"role": "user", "content": "Hi"}]
+                                )
+                                valid_key = True
+                            except Exception as e:
+                                st.error(f"Invalid Anthropic API key: {str(e)}")
+                                return repo_path
+                        elif new_provider == "DeepSeek":
                             # Test the DeepSeek API key
                             try:
                                 from openai import OpenAI
@@ -502,6 +544,23 @@ class SidebarComponent:
                                 valid_key = True
                             except Exception as e:
                                 st.error(f"Invalid DeepSeek API key: {str(e)}")
+                                return repo_path
+                        elif new_provider == "Gemini":
+                            # Validate Gemini API key by testing it
+                            try:
+                                import google.generativeai as genai
+                                # Ensure we're passing a string, not a list
+                                if isinstance(new_api_key, list):
+                                    new_api_key = new_api_key[0] if new_api_key else None
+                                if not new_api_key:
+                                    st.error("Invalid Gemini API key")
+                                    return repo_path
+                                genai.configure(api_key=new_api_key)
+                                # Just get the models list instead of generating content
+                                models = genai.list_models()
+                                valid_key = True
+                            except Exception as e:
+                                st.error(f"Invalid Gemini API key: {str(e)}")
                                 return repo_path
                         
                         # Only save if validation passed
@@ -519,10 +578,10 @@ class SidebarComponent:
                         # Add new key if not already present
                         if new_api_key not in st.session_state.config['api_keys'][key_name]:
                             st.session_state.config['api_keys'][key_name].append(new_api_key)
-                            st.session_state.config['llm_provider'] = provider
-                            st.session_state.config['model'] = selected_model
+                            st.session_state.config['llm_provider'] = new_provider
+                            st.session_state.config['model'] = new_model
                             self.save_config(st.session_state.config)
-                            st.success(f"{provider} API key added successfully!")
+                            st.success(f"{new_provider} API key added successfully!")
                             st.rerun()
                         else:
                             st.warning("This API key is already configured.")
@@ -562,6 +621,63 @@ class SidebarComponent:
                     # Use the VS Code-style tree view
                     from frontend.components.tree_view import TreeView
                     tree_view = TreeView()
+                    
+                    # Add message handler for tree view toggle events
+                    def handle_tree_toggle():
+                        """Handle tree view checkbox toggle events."""
+                        import streamlit.components.v1 as components
+                        
+                        # Create a container for the message handler
+                        components.html(
+                            """
+                            <script>
+                                window.addEventListener('message', function(event) {
+                                    if (event.data.type === 'tree_toggle') {
+                                        const data = event.data.data;
+                                        window.parent.Streamlit.setComponentValue({
+                                            path: data.path,
+                                            type: data.type,
+                                            checked: data.checked
+                                        });
+                                    }
+                                });
+                            </script>
+                            """,
+                            height=0
+                        )
+                        
+                        # Get the toggle event data
+                        toggle_data = st.session_state.get('_last_tree_toggle')
+                        if toggle_data:
+                            path = toggle_data.get('path')
+                            item_type = toggle_data.get('type')
+                            checked = toggle_data.get('checked')
+                            
+                            if path and item_type:
+                                # Update ignore patterns based on toggle
+                                if item_type == 'dir':
+                                    dirs = set(st.session_state.config.get('ignore_patterns', {}).get('directories', []))
+                                    if checked:
+                                        dirs.discard(path)
+                                    else:
+                                        dirs.add(path)
+                                    st.session_state.config['ignore_patterns']['directories'] = sorted(list(dirs))
+                                else:  # file
+                                    files = set(st.session_state.config.get('ignore_patterns', {}).get('files', []))
+                                    if checked:
+                                        files.discard(path)
+                                    else:
+                                        files.add(path)
+                                    st.session_state.config['ignore_patterns']['files'] = sorted(list(files))
+                                
+                                # Save updated config
+                                self.save_config(st.session_state.config)
+                                st.rerun()
+                    
+                    # Add the message handler
+                    handle_tree_toggle()
+                    
+                    # Render the tree view
                     tree_view.render(
                         file_tree['contents'],
                         ignored_dirs=set(st.session_state.config.get('ignore_patterns', {}).get('directories', [])),

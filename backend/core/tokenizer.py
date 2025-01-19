@@ -68,15 +68,11 @@ class TokenCalculator:
             return 0, "empty"
 
         try:
-            # For Gemini models, use their token counter
+            # For Gemini models, use approximate counting
             if model and model.startswith('gemini'):
-                try:
-                    import google.generativeai as genai
-                    count = genai.count_tokens(text)
-                    return count, "gemini_counter"
-                except Exception as e:
-                    self.logger.warning(f"Error using Gemini token counter: {e}")
-                    return self._approximate_token_count(text), "approximate"
+                # Use approximate counting for Gemini (4 chars per token is a reasonable estimate)
+                count = len(text) // 4
+                return count, "approximate"
 
             # Special handling for DeepSeek models
             if model == "deepseek-chat":

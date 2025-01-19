@@ -243,16 +243,10 @@ class FileViewer:
                 return token_count, cost
                 
             elif provider == "Gemini":
-                # Use Google's tokenizer if available
-                try:
-                    import google.generativeai as genai
-                    genai.configure(api_key=st.session_state.config['api_keys'].get('GEMINI_API_KEY', [''])[0])
-                    token_count = genai.count_tokens(content)
-                except:
-                    # Fallback to GPT tokenization as approximation
-                    import tiktoken
-                    encoding = tiktoken.get_encoding("cl100k_base")
-                    token_count = len(encoding.encode(content))
+                # Use approximate token counting for Gemini
+                import tiktoken
+                encoding = tiktoken.get_encoding("cl100k_base")
+                token_count = len(encoding.encode(content))
                 
                 # Gemini pricing per 1k tokens
                 costs = {

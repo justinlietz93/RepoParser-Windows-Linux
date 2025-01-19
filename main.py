@@ -116,12 +116,17 @@ def initialize_session_state():
             try:
                 config_path = Path(__file__).parent / 'config' / 'config.yaml'
                 with open(config_path, 'r', encoding='utf-8') as f:
-                    st.session_state.config = yaml.safe_load(f)
+                    config = yaml.safe_load(f)
+                    # Don't initialize API clients yet
+                    if 'api_keys' in config:
+                        st.session_state.config = {'api_keys': config['api_keys']}
+                    else:
+                        st.session_state.config = {}
                 logger.info("Configuration loaded successfully")
             except Exception as e:
                 logger.error(f"Error loading configuration: {str(e)}")
                 st.error("Failed to load configuration file")
-                st.session_state.config = get_default_config()
+                st.session_state.config = {}
 
     if 'selected_file' not in st.session_state:
         st.session_state.selected_file = None

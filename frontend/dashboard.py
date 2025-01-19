@@ -8,6 +8,7 @@ from frontend.components.file_viewer import FileViewer
 from frontend.components.sidebar import SidebarComponent
 from frontend.codebase_view import render_codebase_view as render_parser_view
 import time
+from time import sleep
 import json
 import asyncio
 import aiohttp
@@ -16,6 +17,8 @@ import numpy as np
 from openai import OpenAI, AsyncOpenAI
 from anthropic import Anthropic, AsyncAnthropic
 from typing import Optional
+import chromadb
+from chromadb.utils import embedding_functions
 
 logger = logging.getLogger(__name__)
 
@@ -341,12 +344,27 @@ def render_chat():
         provider = st.session_state.config.get('llm_provider')
         model = st.session_state.config.get('model')
         
-        # Get API key with rotation
+        # Check if any provider has keys configured
+        any_provider_configured = False
+        for provider_info in SidebarComponent.LLM_PROVIDERS.values():
+            key_name = provider_info["key_name"]
+            keys = st.session_state.config.get('api_keys', {}).get(key_name, [])
+            if not isinstance(keys, list):
+                keys = [keys] if keys else []
+            if keys:
+                any_provider_configured = True
+                break
+
+        # Get API key with rotation for current provider
         api_key = get_api_key(provider)
-        if not api_key:
-            st.error(f"Please configure at least one {provider} API key in the settings first.")
+        if not api_key and not any_provider_configured:
+            st.error("Please configure at least one API key in the settings to use the chat.")
             return
-            
+        elif not api_key:
+            # If current provider has no key but others do, suggest switching
+            st.warning(f"No API key configured for {provider}. Please select a different provider in the settings.")
+            return
+        
         # Create a text input for real-time analysis
         if 'current_input' not in st.session_state:
             st.session_state.current_input = ""
@@ -568,13 +586,7 @@ def get_deepseek_temperature(context_type: str = "coding") -> float:
     return temperatures.get(context_type, 1.0)  # Default to data/analysis temperature
 
 def create_deepseek_client(api_key: str, is_async: bool = False, use_openai_client: bool = False):
-    """Create a DeepSeek client using either the OpenAI client or raw implementation.
-    
-    Args:
-        api_key: The DeepSeek API key
-        is_async: Whether to return an async client
-        use_openai_client: Whether to use the OpenAI client implementation
-    """
+    """Create a DeepSeek client using either the OpenAI client or raw implementation."""
     if use_openai_client:
         from openai import OpenAI, AsyncOpenAI
         if is_async:
@@ -822,6 +834,11 @@ def render_codebase_view():
 
 def render_dashboard():
     """Render the main dashboard."""
+    try:
+        initialize_torch()
+    except Exception as e:
+        logger.warning(f"PyTorch initialization warning (non-critical): {str(e)}")
+    
     # Get sidebar component and render it
     sidebar = SidebarComponent()
     repo_path = sidebar.render()
@@ -911,24 +928,47 @@ class DistributedCognitionSystem:
     """A system that coordinates specialized agents with persistent memory to simulate higher intelligence."""
     
     def __init__(self, persist_dir: str = "./cognitive_memory"):
-        # Ensure persistence directory exists
-        import os
-        os.makedirs(persist_dir, exist_ok=True)
-        
-        # Initialize ChromaDB with persistence
-        self.memory = Client(Settings(
-            persist_directory=persist_dir,
-            is_persistent=True
-        ))
-        
-        # Create or get collection
-        try:
-            self.collection = self.memory.get_collection("agent_insights")
-        except Exception:
-            self.collection = self.memory.create_collection("agent_insights")
-            
+        self.persist_dir = persist_dir
+        self._memory = None
+        self._collection = None
+        self._embedding_fn = None
         self._initialize_roles()
     
+    @property
+    def memory(self):
+        """Lazy initialization of ChromaDB client."""
+        if self._memory is None:
+            import os
+            os.makedirs(self.persist_dir, exist_ok=True)
+            
+            self._memory = chromadb.PersistentClient(
+                path=self.persist_dir,
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True
+                )
+            )
+        return self._memory
+    
+    @property
+    def embedding_fn(self):
+        """Lazy initialization of embedding function."""
+        if self._embedding_fn is None:
+            self._embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name="all-MiniLM-L6-v2"
+            )
+        return self._embedding_fn
+    
+    @property
+    def collection(self):
+        """Lazy initialization of collection."""
+        if self._collection is None:
+            self._collection = self.memory.get_or_create_collection(
+                name="agent_insights",
+                embedding_function=self.embedding_fn
+            )
+        return self._collection
+
     def _initialize_roles(self):
         """Initialize specialized agent roles."""
         self.agent_roles = {
@@ -966,38 +1006,56 @@ class DistributedCognitionSystem:
     
     def store_insight(self, content: str, metadata: dict):
         """Store an agent's insight with metadata for future retrieval."""
-        # Generate ID based on timestamp and agent_id if present
-        insight_id = f"insight_{time.time()}"
-        if 'agent_id' in metadata:
-            insight_id += f"_{metadata['agent_id']}"
+        try:
+            # Only initialize collection when needed
+            if not content:  # Skip empty content
+                return
+                
+            # Generate ID based on timestamp and agent_id if present
+            insight_id = f"insight_{time.time()}"
+            if 'agent_id' in metadata:
+                insight_id += f"_{metadata['agent_id']}"
             
-        # Ensure metadata has consistent schema by providing defaults
-        full_metadata = {
-            "type": "unknown",
-            "timestamp": time.time()
-        }
-        # Update with provided metadata
-        full_metadata.update(metadata)
-        
-        # Replace None values with "(none)" to comply with ChromaDB requirements
-        for k, v in list(full_metadata.items()):
-            if v is None:
-                full_metadata[k] = "(none)"
-        
-        self.collection.add(
-            documents=[content],
-            metadatas=[full_metadata],
-            ids=[insight_id]
-        )
-        logger.debug(f"Stored insight {insight_id}")
+            # Clean and validate metadata for ChromaDB
+            clean_metadata = {}
+            for k, v in metadata.items():
+                if isinstance(v, (list, dict)):
+                    clean_metadata[k] = str(v)
+                elif v is None:
+                    clean_metadata[k] = "none"
+                else:
+                    clean_metadata[k] = str(v)
+            
+            clean_metadata.setdefault("type", "unknown")
+            clean_metadata.setdefault("timestamp", str(time.time()))
+            
+            # Add document to collection
+            self.collection.add(
+                documents=[content],
+                metadatas=[clean_metadata],
+                ids=[insight_id]
+            )
+            logger.debug(f"Stored insight {insight_id}")
+            
+        except Exception as e:
+            logger.error(f"Error storing insight: {str(e)}")
+            pass  # Continue execution even if storage fails
     
     def retrieve_relevant_insights(self, query: str, top_k: int = 5) -> list:
         """Retrieve most relevant past insights for a given query."""
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=top_k
-        )
-        return results['documents'][0]  # Return top matches
+        try:
+            # Skip if no query
+            if not query:
+                return []
+                
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=top_k
+            )
+            return results['documents'][0]  # Return top matches
+        except Exception as e:
+            logger.error(f"Error retrieving insights: {str(e)}")
+            return []  # Return empty list on error
 
     async def analyze_task_requirements(self, prompt: str, model: str, api_key: str, provider: str) -> list[tuple[int, str, str]]:
         """
@@ -1265,16 +1323,46 @@ async def run_deep_think_analysis(prompt: str, model: str, api_key: str, provide
     
     try:
         progress_placeholder = st.empty()
-        progress_placeholder.markdown("🤖 Delegator analyzing task requirements...")
+        
+        # Get all available API keys first
+        available_providers = {}
+        for provider_name, provider_info in SidebarComponent.LLM_PROVIDERS.items():
+            key_name = provider_info["key_name"]
+            keys = st.session_state.config.get('api_keys', {}).get(key_name, [])
+            if not isinstance(keys, list):
+                keys = [keys] if keys else []
+            if keys:
+                available_providers[provider_name] = {
+                    "models": provider_info["models"],
+                    "keys": keys,
+                    "is_coordinator": provider_info.get("is_coordinator", False)
+                }
+        
+        if not available_providers:
+            return "Error: No API keys configured. Please add at least one API key in the settings."
+            
+        progress_placeholder.markdown("🤖 Analyzing available providers and assigning roles...")
         
         # Let delegator analyze and select specialists with their providers
         selected_specialists = await st.session_state.cognitive_system.analyze_task_requirements(
             prompt, model, api_key, provider
         )
         
+        # Filter specialists based on available providers
+        filtered_specialists = []
+        for agent_id, agent_provider, agent_model in selected_specialists:
+            if agent_provider in available_providers:
+                filtered_specialists.append((agent_id, agent_provider, agent_model))
+        
+        if not filtered_specialists:
+            # Fall back to using whatever providers we have
+            available_provider = next(iter(available_providers.items()))[0]
+            available_model = available_providers[available_provider]["models"][0]
+            filtered_specialists = [(1, available_provider, available_model)]
+        
         # Show which roles and providers were selected
         role_displays = []
-        for i, (agent_id, agent_provider, agent_model) in enumerate(selected_specialists):
+        for i, (agent_id, agent_provider, agent_model) in enumerate(filtered_specialists):
             role = st.session_state.cognitive_system.get_agent_role(agent_id)
             role_displays.append(f"🤖 Agent {i+1}: {role} (using {agent_provider} - {agent_model})")
         
@@ -1288,43 +1376,58 @@ async def run_deep_think_analysis(prompt: str, model: str, api_key: str, provide
         
         # Create tasks for specialized agents
         tasks = []
-        for agent_id, agent_provider, agent_model in selected_specialists:
+        for agent_id, agent_provider, agent_model in filtered_specialists:
             # Get provider-specific API key
             agent_api_key = get_api_key(agent_provider)
             if not agent_api_key:
-                logger.warning(f"No API key available for {agent_provider}, skipping agent {agent_id}")
                 continue
                 
             task = process_deep_think_agent_async(
                 prompt, 
-                agent_model,  # Use provider-specific model
-                agent_api_key,  # Use provider-specific API key
-                agent_provider,  # Use assigned provider
+                agent_model,
+                agent_api_key,
+                agent_provider,
                 agent_id,
                 st.session_state.cognitive_system
             )
             tasks.append(task)
         
         if not tasks:
-            return "Error: No agents could be initialized due to missing API keys"
+            return "Error: No agents could be initialized. Please check API key configuration."
         
         # Run all agents in parallel with timeout
         agent_responses = await asyncio.wait_for(
             asyncio.gather(*tasks),
-            timeout=90  # 90 seconds total timeout for all agents
+            timeout=90
         )
         
         # Update progress
         progress_placeholder.markdown("✨ Analysis complete! Synthesizing insights...")
         
-        # Merge insights using coordinator (preferably Gemini if available)
-        if "GEMINI_API_KEY" in st.session_state.config.get('api_keys', {}):
+        # Merge insights using the best available coordinator
+        coordinator_provider = None
+        for provider_name, info in available_providers.items():
+            if info.get("is_coordinator"):
+                coordinator_provider = provider_name
+                break
+        
+        if coordinator_provider == "Gemini" and "GEMINI_API_KEY" in st.session_state.config.get('api_keys', {}):
             final_analysis = merge_summaries_with_gemini(
                 agent_responses,
                 st.session_state.config['api_keys']['GEMINI_API_KEY']
             )
         else:
-            final_analysis = merge_summaries_with_coordinator(agent_responses, model, api_key, provider)
+            # Use DeepSeek or fallback to original provider
+            if "DeepSeek" in available_providers:
+                final_analysis = await synthesize_insights(
+                    agent_responses,
+                    get_api_key("DeepSeek"),
+                    st.session_state.config.get('deepseek_temperature', 0.0)
+                )
+            else:
+                final_analysis = merge_summaries_with_coordinator(
+                    agent_responses, model, api_key, provider
+                )
         
         return final_analysis
         
@@ -1620,55 +1723,84 @@ def merge_summaries_with_gemini(summaries: list[str], gemini_api_key: str) -> st
     and calls Gemini 1.5 to produce a single, well-structured final analysis.
     """
     import google.generativeai as genai
+    from time import sleep
     
-    # Configure Gemini
-    genai.configure(api_key=gemini_api_key)
-    model = genai.GenerativeModel('gemini-1.5-pro-latest')
-    
-    # Build system prompt
-    system_instructions = (
-        "You are a coordination agent responsible for synthesizing multiple code-chunk summaries "
-        "into a coherent final analysis. Your task is to:\n"
-        "1. Review all chunk summaries\n"
-        "2. Identify and connect related components across chunks\n"
-        "3. Resolve any conflicts or inconsistencies\n"
-        "4. Create a comprehensive but concise final analysis that:\n"
-        "   - Maintains crucial technical details\n"
-        "   - Explains the overall architecture\n"
-        "   - Highlights important relationships\n"
-        "   - Preserves specific implementation details\n\n"
-        "Your response should be clear, well-structured, and ready to be presented to the user.\n"
-    )
-
-    # Format agent outputs into a single prompt
-    user_prompt = "Here are partial summaries from specialized agents:\n\n"
-    for i, summary in enumerate(summaries, start=1):
-        user_prompt += f"---\n**Agent {i} Summary**:\n{summary}\n"
-    user_prompt += (
-        "\nPlease merge these into one final, cohesive analysis. "
-        "Add headings, bullet points, code examples, or anything needed for clarity.\n"
-    )
-
     try:
-        # Create chat session
-        chat = model.start_chat(history=[])
+        # Get single API key if it's a list
+        if isinstance(gemini_api_key, list):
+            if not gemini_api_key:
+                raise ValueError("No Gemini API key available")
+            gemini_api_key = gemini_api_key[0]
         
-        # Send system instructions and user prompt
-        response = chat.send_message(
-            f"{system_instructions}\n\n{user_prompt}",
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.7,
-                max_output_tokens=2048,
-                top_p=0.8,
-                top_k=40
-            )
+        # Configure Gemini
+        genai.configure(api_key=gemini_api_key)
+        
+        # Build system instruction
+        system_instruction = (
+            "You are a coordination agent responsible for synthesizing multiple code-chunk summaries "
+            "into a coherent final analysis. Your task is to:\n"
+            "1. Review all chunk summaries\n"
+            "2. Identify and connect related components across chunks\n"
+            "3. Resolve any conflicts or inconsistencies\n"
+            "4. Create a comprehensive but concise final analysis that:\n"
+            "   - Maintains crucial technical details\n"
+            "   - Explains the overall architecture\n"
+            "   - Highlights important relationships\n"
+            "   - Preserves specific implementation details\n\n"
+            "Your response should be clear, well-structured, and ready to be presented to the user.\n"
         )
-        
-        return response.text
-        
+
+        # Initialize model with system instruction
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-pro-001",
+            system_instruction=system_instruction
+        )
+
+        # Format agent outputs into content
+        content = "Here are partial summaries from specialized agents:\n\n"
+        for i, summary in enumerate(summaries, start=1):
+            content += f"---\n**Agent {i} Summary**:\n{summary}\n"
+        content += (
+            "\nPlease merge these into one final, cohesive analysis. "
+            "Add headings, bullet points, code examples, or anything needed for clarity.\n"
+        )
+
+        # Create generation config
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.7,
+            top_p=0.8,
+            top_k=40,
+            max_output_tokens=4096
+        )
+
+        # Send request with retry logic
+        MAX_RETRIES = 3
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = model.generate_content(
+                    content,
+                    generation_config=generation_config
+                )
+                
+                if response.prompt_feedback.block_reason:
+                    logger.warning(f"Response blocked: {response.prompt_feedback.block_reason}")
+                    return "Response was blocked due to content safety filters. Please try again with different content."
+                
+                return response.text
+                
+            except Exception as e:
+                if "429" in str(e) and attempt < MAX_RETRIES - 1:  # Rate limit error
+                    sleep(2 ** attempt)  # Exponential backoff
+                    continue
+                elif attempt == MAX_RETRIES - 1:
+                    logger.error(f"All Gemini coordination attempts failed: {str(e)}")
+                    raise
+                else:
+                    raise
+                    
     except Exception as e:
         logger.error(f"Error in Gemini coordinator: {str(e)}")
-        return f"Error synthesizing with Gemini: {str(e)}" 
+        return f"Error synthesizing with Gemini: {str(e)}"
 
 def get_api_key(provider: str) -> Optional[str]:
     """Get an API key for the specified provider, with rotation and fallback logic."""
@@ -1678,7 +1810,7 @@ def get_api_key(provider: str) -> Optional[str]:
     key_name = SidebarComponent.LLM_PROVIDERS[provider]["key_name"]
     keys = st.session_state.config.get('api_keys', {}).get(key_name, [])
     
-    # Convert single key to list if needed
+    # Convert to list if not already
     if not isinstance(keys, list):
         keys = [keys] if keys else []
     
@@ -1698,4 +1830,90 @@ def get_api_key(provider: str) -> Optional[str]:
     # Update rotation index for next time
     st.session_state.key_rotation_index[key_name] = (current_index + 1) % len(keys)
     
-    return key 
+    return key
+
+def initialize_session_state():
+    """Initialize session state without making API calls."""
+    if 'config' not in st.session_state:
+        st.session_state.config = {}
+    
+    if 'api_keys' not in st.session_state.config:
+        st.session_state.config['api_keys'] = {}
+        
+    if 'selected_file' not in st.session_state:
+        st.session_state.selected_file = None
+        
+    # Don't initialize LLM clients until needed
+    if 'llm_clients' not in st.session_state:
+        st.session_state.llm_clients = {}
+
+def get_llm_client(provider: str):
+    """Lazy initialization of LLM clients."""
+    if provider not in st.session_state.llm_clients:
+        api_key = get_api_key(provider)
+        if not api_key:
+            return None
+            
+        try:
+            if provider == "DeepSeek":
+                st.session_state.llm_clients[provider] = create_deepseek_client(api_key)
+            elif provider == "OpenAI":
+                st.session_state.llm_clients[provider] = OpenAI(api_key=api_key)
+            elif provider == "Anthropic":
+                st.session_state.llm_clients[provider] = Anthropic(api_key=api_key)
+        except Exception as e:
+            logger.error(f"Error initializing {provider} client: {str(e)}")
+            return None
+            
+    return st.session_state.llm_clients.get(provider)
+
+def initialize_torch():
+    """Initialize PyTorch with proper error handling."""
+    try:
+        import warnings
+        # Filter out the specific PyTorch warning about class paths
+        warnings.filterwarnings('ignore', message='.*Examining the path of torch.classes raised.*')
+        
+        import torch
+        # Ensure CUDA is available if needed
+        if torch.cuda.is_available():
+            torch.cuda.init()
+    except Exception as e:
+        logger.warning(f"PyTorch initialization warning (non-critical): {str(e)}")
+        # Continue anyway as this is not critical for basic functionality
+
+def render_dashboard():
+    """Render the main dashboard."""
+    try:
+        initialize_torch()
+    except Exception as e:
+        logger.warning(f"PyTorch initialization warning (non-critical): {str(e)}")
+    
+    # Get sidebar component and render it
+    sidebar = SidebarComponent()
+    repo_path = sidebar.render()
+
+    # Initialize active tab if not set
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = "LLM Chat"  # Default to chat tab
+
+    # Create tabs for different views
+    tab_overview, tab_explorer, tab_chat = st.tabs([
+        "Codebase Overview", 
+        "File Explorer",
+        "LLM Chat"
+    ])
+
+    # Update active tab based on session state
+    if st.session_state.active_tab == "LLM Chat":
+        tab_chat.active = True
+        st.session_state.active_tab = None  # Reset after switching
+
+    with tab_overview:
+        render_codebase_view()
+
+    with tab_explorer:
+        render_file_explorer(repo_path)
+
+    with tab_chat:
+        render_chat() 
