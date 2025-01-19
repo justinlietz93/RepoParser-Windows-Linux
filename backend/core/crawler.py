@@ -136,37 +136,48 @@ class RepositoryCrawler:
             return False
             
     def get_file_tree(self) -> Dict:
-        """Generate a hierarchical file tree structure with improved caching."""
+        """Get the repository file tree structure with caching.
+        
+        Returns:
+            Dict: Tree structure of repository files and directories
+        """
         try:
+            # Check if we have a valid cached tree
             current_hash = self._get_config_hash()
-            
-            # Return cached tree if config hasn't changed
-            if (self._file_tree_cache is not None and 
-                self._config_hash is not None and 
-                self._config_hash == current_hash):
-                logger.debug("Returning cached file tree")
+            if self._file_tree_cache is not None and self._config_hash == current_hash:
+                logger.debug("Using cached file tree")
                 return self._file_tree_cache
-                
+
             logger.info("Generating new file tree structure")
+            
+            # Initialize tree with root info
             tree = {
+                'type': 'directory',
+                'name': self.root_path.name,
                 'path': str(self.root_path),
                 'contents': {}
             }
             
-            self._build_tree_dict(self.root_path, tree['contents'])
+            # Build tree with early ignore checks
+            try:
+                self._build_tree_dict(self.root_path, tree['contents'])
+                logger.info("File tree generated successfully")
+            except Exception as e:
+                logger.error(f"Error building file tree: {str(e)}")
+                tree['error'] = str(e)
             
-            # Update cache with new hash
+            # Cache the result
             self._file_tree_cache = tree
             self._config_hash = current_hash
             
-            logger.info("File tree generated successfully")
             return tree
             
         except Exception as e:
-            logger.error(f"Error generating file tree: {str(e)}")
-            # Invalidate cache on error
-            self._invalidate_cache()
-            raise
+            logger.error(f"Error in get_file_tree: {str(e)}")
+            return {
+                'type': 'error',
+                'message': f"Failed to generate file tree: {str(e)}"
+            }
             
     def _build_tree_dict(self, path: Path, tree: Dict) -> None:
         """Recursively build a dictionary representation of the directory tree."""
@@ -219,24 +230,28 @@ class RepositoryCrawler:
                 dir_path = self.root_path / dir_path
                 
             try:
-                rel_path = str(dir_path.relative_to(self.root_path))
-                logger.debug(f"Checking directory: {rel_path}")
-                
-                # Check exact matches first
-                if rel_path in patterns:
-                    logger.debug(f"Directory {rel_path} exactly matches ignore pattern")
-                    return True
-                    
-                # Then check pattern matches
-                for pattern in patterns:
+                # Check all parent directories first
+                current = dir_path
+                while current != self.root_path and current != current.parent:
                     try:
-                        if fnmatch.fnmatch(rel_path, pattern):
-                            logger.debug(f"Directory {rel_path} matches pattern {pattern}")
+                        rel_path = str(current.relative_to(self.root_path)).lower()  # Case-insensitive
+                        # Check exact matches
+                        if any(p.lower() == rel_path for p in patterns):
+                            logger.debug(f"Directory {rel_path} or parent exactly matches ignore pattern")
                             return True
-                    except Exception as e:
-                        logger.warning(f"Error matching pattern {pattern}: {str(e)}")
-                        continue
-                        
+                        # Check pattern matches
+                        for pattern in patterns:
+                            try:
+                                if fnmatch.fnmatch(rel_path.lower(), pattern.lower()):
+                                    logger.debug(f"Directory {rel_path} or parent matches pattern {pattern}")
+                                    return True
+                            except Exception as e:
+                                logger.warning(f"Error matching pattern {pattern}: {str(e)}")
+                                continue
+                    except ValueError:
+                        break
+                    current = current.parent
+                
                 return False
                 
             except ValueError:

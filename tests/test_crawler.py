@@ -82,4 +82,91 @@ def test_ignore_patterns():
     
     # Check the contents of the tree
     if 'contents' in tree:
-        check_tree(tree['contents']) 
+        check_tree(tree['contents'])
+
+def test_should_ignore_dir():
+    """Test directory ignore pattern matching."""
+    # Setup test config with ignore patterns
+    config = {
+        'ignore_patterns': {
+            'directories': [
+                'storage',
+                'storage/**',
+                '**/storage',
+                '**/storage/**',
+                'datasets',
+                'request_queues'
+            ],
+            'files': []
+        }
+    }
+    
+    # Create crawler with test root path
+    crawler = RepositoryCrawler(str(Path.cwd()), config)
+    
+    # Test cases
+    test_cases = [
+        # Direct matches
+        ('storage', True),
+        ('storage/', True),
+        ('datasets', True),
+        ('request_queues', True),
+        
+        # Nested paths
+        ('path/to/storage', True),
+        ('path/to/storage/subdir', True),
+        ('path/to/datasets', True),
+        ('path/to/request_queues', True),
+        
+        # Non-matches
+        ('not_storage', False),
+        ('my_datasets_folder', False),
+        ('requests', False),
+    ]
+    
+    # Run tests
+    for path, should_ignore in test_cases:
+        assert crawler._should_ignore_dir(path) == should_ignore, \
+            f"Failed for path: {path}, expected: {should_ignore}"
+
+def test_ignore_patterns_in_tree():
+    """Test that ignored directories are excluded from file tree."""
+    # Setup test config
+    config = {
+        'ignore_patterns': {
+            'directories': [
+                'storage',
+                'storage/**',
+                '**/storage',
+                '**/storage/**',
+                'datasets',
+                'request_queues'
+            ],
+            'files': []
+        }
+    }
+    
+    # Create crawler with test root
+    crawler = RepositoryCrawler(str(Path.cwd()), config)
+    
+    # Get file tree
+    tree = crawler.get_file_tree()
+    
+    def check_tree_for_ignored(tree_dict, ignored_names=['storage', 'datasets', 'request_queues']):
+        """Recursively check tree for ignored directories."""
+        if not isinstance(tree_dict, dict):
+            return True
+            
+        # Check current level
+        for name in ignored_names:
+            assert name not in tree_dict, f"Found ignored directory '{name}' in tree"
+            
+        # Check nested directories
+        for value in tree_dict.values():
+            if isinstance(value, dict):
+                check_tree_for_ignored(value, ignored_names)
+                
+        return True
+    
+    # Verify no ignored directories in tree
+    assert check_tree_for_ignored(tree.get('contents', {})), "Found ignored directories in tree" 
