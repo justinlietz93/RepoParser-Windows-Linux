@@ -104,8 +104,8 @@ graph TD
 
 ```bash
 # Clone the repository
-git clone https://github.com/justinlietz93/RepoPrompt-Windows-Linux.git
-cd RepoPrompt-Windows-Linux
+git clone https://github.com/justinlietz93/Reposi-Parser-Windows-Linux.git
+cd Reposi-Parser-Windows-Linux
 
 # Create and activate virtual environment
 python -m venv venv
